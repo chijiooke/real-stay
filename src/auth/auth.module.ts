@@ -13,7 +13,7 @@ import { MailService } from 'src/utility-services/nodemailer';
     UsersModule,
     PassportModule,
     JwtModule.register({
-      secret: 'your_secret_key',
+      secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: '1h' },
     }),
   ],

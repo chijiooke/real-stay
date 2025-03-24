@@ -21,6 +21,20 @@ export class AuthService {
     private readonly mailService: MailService,
   ) {}
 
+  async verifyToken(token: string): Promise<any> {
+    try {
+      return await this.jwtService.verifyAsync(token); // This will return the user data, including userId
+    } catch (error) {
+      if (error.name === 'TokenExpiredError') {
+        throw new UnauthorizedException('Token has expired');
+      } else if (error.name === 'JsonWebTokenError') {
+        throw new UnauthorizedException('Invalid token');
+      } else {
+        throw new UnauthorizedException('Failed to verify token');
+      }
+    }
+  }
+
   async signup(payload: User): Promise<{
     id: string;
     email: string;
@@ -76,7 +90,9 @@ export class AuthService {
   }): Promise<{ message: string }> {
     //send otp email, sms
     const key = email + '-password-reset';
-    const otp = generateOtp(6);
+    const otp = generateOtp(5);
+
+    console.log({ otp });
     await this.redisService.set(key, otp, 300);
     await this.mailService.sendTemplateEmail(
       email,
@@ -120,6 +136,9 @@ export class AuthService {
       );
     }
 
+    await this.redisService.del(key);
+
+    updatedUser.password = '';
     return updatedUser;
   }
 }

@@ -94,10 +94,8 @@ export class MailService {
     try {
       const htmlContent = await this.renderTemplate(templateName, replacements);
 
-      console.log('htmlContent', htmlContent);
-
       const mailOptions = {
-        from: process.env.BREVO_EMAIL,
+        from: `Real Stay <${process.env.BREVO_EMAIL}>`,
         to,
         subject,
         html: htmlContent, // Rendered HTML
@@ -105,7 +103,7 @@ export class MailService {
 
       const info = await this.transporter.sendMail(mailOptions);
       console.log(
-        `✅ Email sent to ${to}: ${JSON.stringify(info) || 'No message ID'}`,
+        `✅ Email sent to ${to}: ${info?.messageId || 'No message ID'}`,
       );
     } catch (error) {
       console.error(`❌ Error sending email to ${to}:`, error);
