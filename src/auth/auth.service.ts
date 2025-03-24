@@ -10,6 +10,7 @@ import { User, UserDocument } from '../users/schemas/user.schema';
 import { UsersService } from '../users/users.service';
 import { RedisService } from 'src/utility-services/redis';
 import { MailService } from 'src/utility-services/nodemailer';
+import { generateOtp } from 'src/utils/helpers';
 
 @Injectable()
 export class AuthService {
@@ -59,6 +60,8 @@ export class AuthService {
       email: user.email,
       first_name: user.first_name,
       last_name: user.last_name,
+      gender: user.gender,
+      phone_number: user.phone_number,
     } as Omit<UserDocument, 'password'>;
   }
 
@@ -72,8 +75,18 @@ export class AuthService {
     email: string;
   }): Promise<{ message: string }> {
     //send otp email, sms
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    await this.redisService.set(`otp:${email}`, otp, 300);
+    const key = email + '-password-reset';
+    const otp = generateOtp(6);
+    await this.redisService.set(key, otp, 300);
+    await this.mailService.sendTemplateEmail(
+      email,
+      'Password Reset',
+      'forgot-password',
+      {
+        otp,
+        url: 'http://localhost:3000/reset-password', //frontend url
+      },
+    );
 
     return { message: 'Otp sent to email successfully' };
   }

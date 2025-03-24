@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   InternalServerErrorException,
@@ -31,7 +32,15 @@ export class UsersService {
       });
       return await newUser.save();
     } catch (error) {
-      console.log(error);
+      if (error.code === 11000) {
+        const duplicateField = Object.keys(error.keyPattern)[0]?.replaceAll(
+          '_',
+          ' ',
+        ); // Get the duplicate field name
+        throw new BadRequestException(
+          `The ${duplicateField} is already in use.`,
+        );
+      }
       throw new InternalServerErrorException('Failed to create user');
     }
   }
