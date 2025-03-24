@@ -17,7 +17,6 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       throw new UnauthorizedException('Invalid token format');
     }
 
-    console.log({ context });
     return super.canActivate(context);
   }
 }
