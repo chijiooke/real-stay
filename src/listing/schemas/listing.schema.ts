@@ -4,12 +4,15 @@ import { Document, Types } from 'mongoose';
 export type ListingDocument = Listing & Document<Types.ObjectId>;
 
 @Schema({ timestamps: true }) // Auto-add createdAt & updatedAt fields
-export class Listing {
+export class Listing extends Document {
   @Prop({ required: true })
   place_holder_address: string;
 
   @Prop({ required: true })
   google_formatted_address: string;
+
+  @Prop({ required: true })
+  owner_id: string;
 
   @Prop({ required: true })
   state: string;
@@ -22,6 +25,12 @@ export class Listing {
 
   @Prop({ required: true })
   lng: number;
+
+  @Prop({
+    type: { type: String, default: 'Point' },
+    coordinates: { type: [Number], required: true, index: '2dsphere' }, // Create a Geo Index
+  })
+  location: { type: string; coordinates: number[] };
 
   @Prop({ required: true })
   type: string;
@@ -61,3 +70,4 @@ export class Listing {
 }
 
 export const ListingSchema = SchemaFactory.createForClass(Listing);
+ListingSchema.index({ location: '2dsphere' });

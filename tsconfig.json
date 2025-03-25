@@ -1,21 +1,28 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
-    "declaration": true,
-    "removeComments": true,
-    "emitDecoratorMetadata": true,
-    "experimentalDecorators": true,
-    "allowSyntheticDefaultImports": true,
-    "target": "ES2023",
-    "sourceMap": true,
-    "outDir": "./dist",
-    "baseUrl": "./",
-    "incremental": true,
-    "skipLibCheck": true,
-    "strictNullChecks": true,
-    "forceConsistentCasingInFileNames": true,
-    "noImplicitAny": false,
-    "strictBindCallApply": false,
-    "noFallthroughCasesInSwitch": false
-  }
+    "module": "commonjs",            // Keep CommonJS for compiled files in dist
+    "declaration": true,             // Generate .d.ts declaration files
+    "removeComments": true,          // Remove comments in compiled JS
+    "emitDecoratorMetadata": true,   // Enable metadata for decorators
+    "experimentalDecorators": true,  // Enable experimental decorators
+    "allowSyntheticDefaultImports": true, // Allow synthetic default imports
+    "target": "ES2023",              // Target modern JavaScript (ES2023)
+    "sourceMap": true,               // Generate source maps
+    "outDir": "./dist",              // Output directory for compiled JS
+    "baseUrl": "./",                 // Base URL for resolving non-relative paths
+    "incremental": true,             // Enable incremental compilation
+    "skipLibCheck": true,            // Skip type checking for libraries
+    "strictNullChecks": true,        // Enable strict null checks
+    "forceConsistentCasingInFileNames": true, // Ensure consistent casing in file names
+    "noImplicitAny": false,          // Allow implicit any types (for now)
+    "strictBindCallApply": false,    // Relax bind/call/apply strictness
+    "noFallthroughCasesInSwitch": false // Allow fallthrough in switch cases
+  },
+  "include": [
+    "src/**/*"  // Include all source files in the src directory
+  ],
+  "exclude": [
+    "node_modules", // Exclude node_modules from compilation
+    "dist"          // Exclude the dist directory from being compiled again
+  ]
 }
