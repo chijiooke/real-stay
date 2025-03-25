@@ -11,9 +11,12 @@ import { UsersService } from '../users/users.service';
 import { RedisService } from 'src/utility-services/redis';
 import { MailService } from 'src/utility-services/nodemailer';
 import { generateOtp } from 'src/utils/helpers';
+import { OAuth2Client } from 'google-auth-library';
 
 @Injectable()
 export class AuthService {
+  private googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
@@ -21,78 +24,105 @@ export class AuthService {
     private readonly mailService: MailService,
   ) {}
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async verifyToken(token: string): Promise<any> {
     try {
-      return await this.jwtService.verifyAsync(token); // This will return the user data, including userId
+      return await this.jwtService.verifyAsync(token);
     } catch (error) {
-      if (error.name === 'TokenExpiredError') {
-        throw new UnauthorizedException('Token has expired');
-      } else if (error.name === 'JsonWebTokenError') {
-        throw new UnauthorizedException('Invalid token');
-      } else {
-        throw new UnauthorizedException('Failed to verify token');
-      }
+      throw new UnauthorizedException(
+        error.name === 'TokenExpiredError'
+          ? 'Token has expired'
+          : 'Invalid token',
+      );
     }
   }
 
-  async signup(payload: User): Promise<{
-    id: string;
-    email: string;
-    first_name: string;
-    last_name: string;
-  }> {
-    // Check if the user already exists
-    const existingUser = await this.usersService.findByEmail(payload?.email);
-    if (existingUser) {
-      throw new ConflictException('User already exists');
-    }
+  async signup(payload: User): Promise<Partial<UserDocument>> {
+    const existingUser = await this.usersService.findByEmail(payload.email);
+    if (existingUser) throw new ConflictException('User already exists');
 
     const user = await this.usersService.createUser(payload);
-
-    // Return only the necessary fields
-    return {
-      id: user._id.toHexString(),
-      email: user.email,
-      first_name: user.first_name,
-      last_name: user.first_name,
-    };
+    return this.sanitizeUser(user);
   }
 
   async validateUser(
     email: string,
-    userPassword: string,
-  ): Promise<Omit<UserDocument, 'password'> | null> {
+    password: string,
+  ): Promise<Partial<UserDocument> | null> {
     const user = await this.usersService.findByEmail(email);
-    if (!user) throw new UnauthorizedException('Invalid email or password');
-
-    const isPasswordValid = await bcrypt.compare(userPassword, user.password);
-    if (!isPasswordValid)
+    if (!user || !(await bcrypt.compare(password, user.password))) {
       throw new UnauthorizedException('Invalid email or password');
+    }
+    return this.sanitizeUser(user);
+  }
 
+  login(user: UserDocument): {
+    user: Partial<UserDocument>;
+    access_token: string;
+  } {
     return {
-      id: user._id.toHexString(),
-      email: user.email,
-      first_name: user.first_name,
-      last_name: user.last_name,
-      gender: user.gender,
-      phone_number: user.phone_number,
-    } as Omit<UserDocument, 'password'>;
+      user: this.sanitizeUser(user),
+      access_token: this.jwtService.sign({ id: user._id, email: user.email }),
+    };
   }
 
-  login(user: UserDocument): { user: UserDocument; access_token: string } {
-    return { user, access_token: this.jwtService.sign(user) };
+  async googleLogin(
+    token: string,
+  ): Promise<{ user: Partial<UserDocument>; access_token: string }> {
+    const ticket = await this.googleClient.verifyIdToken({
+      idToken: token,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+
+    if (!payload || !payload.email) {
+      throw new UnauthorizedException('Invalid Google token');
+    }
+
+    const first_name = payload.given_name || '';
+    const last_name = payload.family_name || ''; // Handle missing last name
+    const email = payload.email;
+
+    let user = await this.usersService.findByEmail(email);
+    if (!user) {
+      user = await this.usersService.createUser({
+        email,
+        first_name,
+        last_name,
+        password: '',
+        phone_number: '',
+      });
+    }
+
+    return this.login(user);
   }
 
-  async initiatePasswordChange({
-    email,
-  }: {
-    email: string;
-  }): Promise<{ message: string }> {
-    //send otp email, sms
-    const key = email + '-password-reset';
+  async appleLogin(
+    identityToken: string,
+  ): Promise<{ user: Partial<UserDocument>; access_token: string }> {
+    // Decode Apple ID token
+    const { email, sub: apple_id } = this.decodeAppleToken(identityToken);
+
+    let user = await this.usersService.findByEmail(email);
+    if (!user) {
+      user = await this.usersService.createUser({
+        first_name: '',
+        last_name: '',
+        phone_number: '',
+        email,
+        apple_id,
+        password: '',
+      });
+    }
+
+    return this.login(user);
+  }
+
+  async initiatePasswordChange(email: string): Promise<{ message: string }> {
+    const key = `${email}-password-reset`;
     const otp = generateOtp(5);
 
-    console.log({ otp });
     await this.redisService.set(key, otp, 300);
     await this.mailService.sendTemplateEmail(
       email,
@@ -100,46 +130,61 @@ export class AuthService {
       'forgot-password',
       {
         otp,
-        url: 'http://localhost:3000/reset-password', //frontend url
+        url: 'http://localhost:3000/reset-password',
       },
     );
 
     return { message: 'Otp sent to email successfully' };
   }
 
-  async changePassword({
-    email,
-    password,
-    otp,
-  }: {
-    email: string;
-    password: string;
-    otp: string;
-  }): Promise<UserDocument> {
-    const key = email + '-password-reset';
+  async changePassword(
+    email: string,
+    password: string,
+    otp: string,
+  ): Promise<Partial<UserDocument>> {
+    const key = `${email}-password-reset`;
     const redisOtp = await this.redisService.get(key);
 
-    const isProd = process.env.ENVIRONMENT === 'production';
-    if (!isProd && otp !== '22222' && redisOtp !== otp) {
+    if (
+      process.env.ENVIRONMENT === 'production' &&
+      otp !== '22222' &&
+      redisOtp !== otp
+    ) {
       throw new BadRequestException('Invalid otp provided');
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-
     const updatedUser = await this.usersService.updateByFilter(
       { email },
-      { password: hashedPassword },
+      { password: await bcrypt.hash(password, 10) },
     );
-
-    if (!updatedUser) {
+    if (!updatedUser)
       throw new BadRequestException(
         'Failed to update. Please confirm the email provided.',
       );
-    }
 
     await this.redisService.del(key);
+    return this.sanitizeUser(updatedUser);
+  }
 
-    updatedUser.password = '';
-    return updatedUser;
+  private sanitizeUser(user: UserDocument): Partial<UserDocument> {
+    return {
+      id: user._id.toHexString(),
+      email: user.email,
+      first_name: user.first_name,
+      last_name: user.last_name,
+      gender: user.gender,
+      phone_number: user.phone_number,
+    };
+  }
+
+  private decodeAppleToken(token: string): { email: string; sub: string } {
+    const [header, payload, signature] = token.split('.');
+    if (!header || !payload || !signature)
+      throw new UnauthorizedException('Invalid Apple token');
+
+    const decodedPayload = JSON.parse(
+      Buffer.from(payload, 'base64').toString(),
+    );
+    return { email: decodedPayload.email, sub: decodedPayload.sub };
   }
 }

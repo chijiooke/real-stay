@@ -76,4 +76,10 @@ export class ListingController {
 
     return this.listingService.getListings(parsedFilter, search);
   }
+
+  @Get('/:listingId')
+  @UseGuards(JwtAuthGuard)
+  async getByListingId(@Request() req, @Param('listingId') listingId: string) {
+    return this.listingService.getListing(listingId);
+  }
 }

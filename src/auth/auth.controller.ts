@@ -21,7 +21,7 @@ export class AuthController {
 
   @Post('forgot-password')
   async initiatePasswordChange(@Body() { email }: { email: string }) {
-    return this.authService.initiatePasswordChange({ email });
+    return this.authService.initiatePasswordChange(email);
   }
 
   @Patch('change-password')
@@ -29,6 +29,16 @@ export class AuthController {
     @Body()
     { email, password, otp }: { email: string; password: string; otp: string },
   ) {
-    return this.authService.changePassword({ email, password, otp });
+    return this.authService.changePassword(email, password, otp);
+  }
+
+  @Post('/google')
+  async googleLogin(@Body('token') token: string) {
+    return this.authService.googleLogin(token);
+  }
+
+  @Post('/apple')
+  async appleLogin(@Body('identityToken') token: string) {
+    return this.authService.appleLogin(token);
   }
 }
