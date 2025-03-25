@@ -10,9 +10,9 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
+import { JwtAuthGuard } from 'src/auth/jwtAuthGuard';
 import { ListingService } from './listing.service';
 import { Listing } from './schemas/listing.schema';
-import { JwtAuthGuard } from 'src/auth/jwtAuthGuard';
 
 @Controller('listing')
 export class ListingController {
@@ -56,5 +56,24 @@ export class ListingController {
     }
 
     return this.listingService.getSavedListing(userId, parsedFilter, search);
+  }
+
+  @Get('')
+  @UseGuards(JwtAuthGuard)
+  async get(
+    @Request() req,
+    @Query('filter') filter: string,
+    @Query('search') search: string,
+  ) {
+    // Parse the filter from the query string if necessary
+    let parsedFilter;
+    try {
+      parsedFilter = filter ? JSON.parse(filter) : {};
+    } catch (error) {
+      console.log(error);
+      throw new BadRequestException('Invalid filter format');
+    }
+
+    return this.listingService.getListings(parsedFilter, search);
   }
 }

@@ -38,6 +38,50 @@ export class ListingService {
     }
   }
 
+  async getListing(listingId: string): Promise<ListingDocument | null> {
+    return this.listingModel.findOne({ _id: new Types.ObjectId(listingId) });
+  }
+
+  async getListings(
+    filter: FilterQuery<Listing>,
+    search?: string,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<{
+    listings: ListingDocument[];
+    pagination: {
+      total_items: number;
+      total_pages: number;
+      current_page: number;
+      limit: number;
+    };
+  }> {
+    const query: FilterQuery<Listing> = { ...filter };
+
+    if (search) {
+      query.google_formatted_address = { $regex: search, $options: 'i' };
+    }
+
+    const [total_items, listings] = await Promise.all([
+      this.listingModel.countDocuments(query),
+      this.listingModel
+        .find(query)
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .exec(),
+    ]);
+
+    return {
+      listings,
+      pagination: {
+        total_items,
+        total_pages: Math.ceil(total_items / limit),
+        current_page: page,
+        limit,
+      },
+    };
+  }
+
   /**
    * Saves a listing by associating it with a user.
    * @param listingId - The ID of the listing to save.
