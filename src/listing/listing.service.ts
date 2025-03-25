@@ -20,26 +20,42 @@ export class ListingService {
 
   async createListing(payload: Listing): Promise<ListingDocument> {
     try {
-      const newListing = new this.listingModel({
-        ...payload,
-      });
-      return await newListing.save();
+      return await this.listingModel.create(payload);
     } catch (error) {
       if (error.code === 11000) {
-        const duplicateField = Object.keys(error.keyPattern)[0]?.replaceAll(
-          '_',
-          ' ',
-        ); // Get the duplicate field name
+        const duplicateField = Object.keys(
+          error.keyPattern || {},
+        )[0]?.replaceAll('_', ' ');
         throw new BadRequestException(
           `The ${duplicateField} is already in use.`,
         );
       }
-      throw new InternalServerErrorException('Failed to create listing');
+      throw new InternalServerErrorException(
+        error.message || 'Failed to create listing',
+      );
     }
   }
 
+  //To Do: hide password from response
   async getListing(listingId: string): Promise<ListingDocument | null> {
-    return this.listingModel.findOne({ _id: new Types.ObjectId(listingId) });
+    const result = await this.listingModel.aggregate([
+      {
+        $match: { _id: new Types.ObjectId(listingId) },
+      },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'owner_id',
+          foreignField: '_id',
+          as: 'owner',
+        },
+      },
+      {
+        $unwind: { path: '$owner', preserveNullAndEmptyArrays: true },
+      },
+    ]);
+
+    return result.length > 0 ? result[0] : null;
   }
 
   async getListings(

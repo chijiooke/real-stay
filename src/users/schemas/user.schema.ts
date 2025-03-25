@@ -24,6 +24,9 @@ export class User {
   @Prop({ default: null }) // Allow null but don't enforce requirement
   gender?: string;
 
+  @Prop({ default: null }) // Allow null but don't enforce requirement
+  apple_id?: string;
+
   @Prop({ default: 'guest', enum: ['host', 'guest'] }) // Set default & restrict values
   user_type?: string;
 }

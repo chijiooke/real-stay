@@ -3,7 +3,9 @@ import { Document, Types } from 'mongoose';
 
 export type ListingDocument = Listing & Document<Types.ObjectId>;
 
-@Schema({ timestamps: true }) // Auto-add createdAt & updatedAt fields
+import { Schema as MongooseSchema } from 'mongoose';
+
+@Schema({ timestamps: true }) // Automatically adds createdAt & updatedAt
 export class Listing extends Document {
   @Prop({ required: true })
   place_holder_address: string;
@@ -11,8 +13,8 @@ export class Listing extends Document {
   @Prop({ required: true })
   google_formatted_address: string;
 
-  @Prop({ required: true })
-  owner_id: string;
+  @Prop({ type: MongooseSchema.Types.ObjectId, required: true, ref: 'User' }) // Reference to User collection
+  owner_id: Types.ObjectId;
 
   @Prop({ required: true })
   state: string;
@@ -27,47 +29,48 @@ export class Listing extends Document {
   lng: number;
 
   @Prop({
-    type: { type: String, default: 'Point' },
-    coordinates: { type: [Number], required: true, index: '2dsphere' }, // Create a Geo Index
+    type: { type: String, enum: ['Point'], default: 'Point' },
+    coordinates: { type: [Number], required: true },
   })
   location: { type: string; coordinates: number[] };
 
   @Prop({ required: true })
   type: string;
 
-  @Prop({ default: null })
-  no_of_beds: number;
+  @Prop()
+  no_of_beds?: number;
 
-  @Prop({ default: null })
-  are_pets_allowed: boolean;
+  @Prop()
+  are_pets_allowed?: boolean;
 
-  @Prop({ default: null })
-  no_of_bedrooms: number;
+  @Prop()
+  no_of_bedrooms?: number;
 
-  @Prop({ default: null })
-  no_of_bathrooms: number;
+  @Prop()
+  no_of_bathrooms?: number;
 
-  @Prop({ default: null })
-  are_parties_allowed: boolean;
+  @Prop()
+  are_parties_allowed?: boolean;
 
-  @Prop({ default: null })
+  @Prop({ type: [String], default: [] })
   extra_offerings: string[];
 
-  @Prop({ default: null })
-  title: string;
+  @Prop()
+  title?: string;
 
-  @Prop({ default: null })
-  description: string;
+  @Prop()
+  description?: string;
 
-  @Prop({ default: null })
-  cost: number;
+  @Prop()
+  cost?: number;
 
-  @Prop({ default: null })
-  cost_cycle: string;
+  @Prop()
+  cost_cycle?: string;
 
-  @Prop({ required: true })
+  @Prop({ type: [String], required: true })
   photos: string[];
 }
 
 export const ListingSchema = SchemaFactory.createForClass(Listing);
-ListingSchema.index({ location: '2dsphere' });
+ListingSchema.index({ location: '2dsphere' }); // Ensure geospatial index
+
