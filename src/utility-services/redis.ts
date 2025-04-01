@@ -10,6 +10,7 @@ export class RedisService {
       host: process.env.REDIS_HOST || '127.0.0.1',
       port: Number(process.env.REDIS_PORT) || 6379,
       password: process.env.REDIS_PASSWORD || '',
+      username: process.env.REDIS_USERNAME || '',
     });
 
     this.client.on('error', (err) => {
