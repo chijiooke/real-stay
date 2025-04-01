@@ -14,8 +14,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.enableCors(); // Enable CORS if needed
-  await app.listen(3000); // Run on port 3000
-  
+  await app.listen(process.env.PORT || '3000'); 
 }
 
 // Call bootstrap to initialize the app
@@ -23,4 +22,3 @@ bootstrap();
 
 // Export the Firebase function
 export const api = functions.https.onRequest(server);
-
