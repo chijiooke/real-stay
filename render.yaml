@@ -13,11 +13,11 @@ services:
       - key: MONGO_URI
         sync: false  # Set this in the dashboard for security
       - key: MAILER_HOST
-        sync: smtp-relay.brevo.com
+        value: smtp-relay.brevo.com
       - key: MAILER_PORT
-        sync: 587
+        value: 587
       - key: BREVO_EMAIL
-        sync: 88b6ca003@smtp-brevo.com
+        value: 88b6ca003@smtp-brevo.com
       - key: BREVO_API_KEY
         sync: false  # Set this in the dashboard for security
 
