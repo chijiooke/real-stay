@@ -61,7 +61,7 @@ export class AuthService {
     access_token: string;
   } {
     return {
-      user: this.sanitizeUser(user),
+      user: user,
       access_token: this.jwtService.sign({ id: user._id, email: user.email }),
     };
   }
@@ -69,6 +69,8 @@ export class AuthService {
   async googleLogin(
     token: string,
   ): Promise<{ user: Partial<UserDocument>; access_token: string }> {
+    console.log(process.env.GOOGLE_CLIENT_ID);
+
     const ticket = await this.googleClient.verifyIdToken({
       idToken: token,
       audience: process.env.GOOGLE_CLIENT_ID,
