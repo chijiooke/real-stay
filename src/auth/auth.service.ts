@@ -27,8 +27,11 @@ export class AuthService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async verifyToken(token: string): Promise<any> {
     try {
+      
       return await this.jwtService.verifyAsync(token);
     } catch (error) {
+      console.log('Authenticated user error:', error);
+
       throw new UnauthorizedException(
         error.name === 'TokenExpiredError'
           ? 'Token has expired'
@@ -60,9 +63,11 @@ export class AuthService {
     user: Partial<UserDocument>;
     access_token: string;
   } {
+
+    console.log({user})
     return {
       user: user,
-      access_token: this.jwtService.sign({ id: user._id, email: user.email }),
+      access_token: this.jwtService.sign({ id: user.id, email: user.email }),
     };
   }
 
