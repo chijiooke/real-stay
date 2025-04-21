@@ -8,54 +8,13 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import * as cloudinary from 'cloudinary';
 import { Request } from 'express';
-import * as formidable from 'formidable';
 import { JwtAuthGuard } from 'src/auth/jwtAuthGuard';
 import { ChatService } from './chat.service';
-
-cloudinary.v2.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
 
 @Controller('chat')
 export class ChatController {
   constructor(private readonly chatService: ChatService) {}
-
-  // 🔐 Protected route
-  @UseGuards(JwtAuthGuard)
-  @Post('upload')
-  async uploadFile(@Req() req: Request): Promise<unknown> {
-    const form = new formidable.IncomingForm({
-      multiples: false,
-      keepExtensions: true,
-    });
-
-    const [, files] = await form.parse(req);
-
-    // Get the file (safe access for single file)
-    const file = files['file'] as formidable.File;
-
-    if (!file || !file[0]?.filepath) {
-      throw new Error('No file uploaded');
-    }
-
-    const uploadResult = await cloudinary.v2.uploader.upload(
-      file[0]?.filepath,
-      {
-        folder: 'chat_files',
-        resource_type: 'auto',
-        public_id: `${Date.now()}-${file[0]?.originalFilename}`,
-      },
-    );
-
-    return {
-      url: uploadResult.secure_url,
-      fileType: uploadResult.resource_type,
-    };
-  }
 
   // 💬 Send message via REST (optional fallback/test)
   @UseGuards(JwtAuthGuard)
@@ -93,10 +52,20 @@ export class ChatController {
   // 📖 Get chat history
   @UseGuards(JwtAuthGuard)
   @Get('messages/:userId')
-  async getChatHistory(@Req() req: Request, @Param('userId') userId: string) {
+  async getConversation(@Req() req: Request, @Param('userId') userId: string) {
     const me = req.user as { _id: string };
 
     console.log({ me });
     return this.chatService.getConversation(me._id.toString(), userId);
+  }
+
+  // 📖 Get chat history
+  @UseGuards(JwtAuthGuard)
+  @Get('messages')
+  async getConversations(@Req() req: Request) {
+    const me = req.user as { _id: string };
+
+    console.log({ me });
+    return this.chatService.getConversations(me._id.toString());
   }
 }

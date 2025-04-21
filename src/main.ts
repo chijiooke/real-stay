@@ -28,13 +28,21 @@
 
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+// import { ResponseInterceptor } from './interceptors/response-interceptor';
+// import { GlobalExceptionFilter } from './filters/http-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  app.enableCors(); // Enable CORS if needed
+
+  app.enableCors();
+  // app.useGlobalInterceptors(new ResponseInterceptor()); 
+  // app.useGlobalFilters(new GlobalExceptionFilter());
+
   const port = process.env.PORT || '8080';
   await app.listen(port);
-  console.log(`app listening on ${port}`);
+
+  console.log(`🚀 App listening on port ${port}`);
 }
+
 
 bootstrap();

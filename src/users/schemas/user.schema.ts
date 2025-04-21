@@ -22,12 +22,15 @@ export class User {
   phone_number: string;
 
   @Prop({ default: null }) // Allow null but don't enforce requirement
+  image_url?: string;
+
+  @Prop({ default: null }) // Allow null but don't enforce requirement
   gender?: string;
 
   @Prop({ default: null }) // Allow null but don't enforce requirement
   apple_id?: string;
 
-  @Prop({ default: 'guest', enum: ['host', 'guest'] }) // Set default & restrict values
+  @Prop({ default: 'guest', enum: ['host', 'guest', 'admin'] }) // Set default & restrict values
   user_type?: string;
 }
 

@@ -7,6 +7,7 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model, Types } from 'mongoose';
 import { User, UserDocument } from './schemas/user.schema';
+import { buildSearchQuery } from 'src/utils/helpers';
 
 @Injectable()
 export class UsersService {
@@ -45,11 +46,24 @@ export class UsersService {
     }
   }
 
+  async findById(id: string): Promise<UserDocument | null> {
+    return await this.userModel
+      .findOne({ _id: new Types.ObjectId(id) })
+      .lean()
+      .exec();
+  }
+
   async findByEmail(email: string): Promise<UserDocument | null> {
     return await this.userModel
       .findOne({ email: email.toLowerCase() })
       .lean()
       .exec();
+  }
+
+  async findByFilter(
+    filter: FilterQuery<UserDocument>,
+  ): Promise<Partial<UserDocument> | null> {
+    return this.userModel.findOne(filter).lean().exec();
   }
 
   async updateById(
@@ -68,5 +82,55 @@ export class UsersService {
     return this.userModel
       .findOneAndUpdate(filter, payload, { new: true })
       .exec();
+  }
+
+  async getUsers(
+    filter: FilterQuery<User>,
+    search?: string,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<{
+    users: UserDocument[];
+    pagination: {
+      total_items: number;
+      total_pages: number;
+      current_page: number;
+      limit: number;
+    };
+  }> {
+    const query: FilterQuery<User> = { ...filter };
+
+    if (search) {
+      const searchQuery = buildSearchQuery(search, [
+        'first_name',
+        'last_name',
+        'email',
+        'phone_number',
+      ]);
+      query.$and = [searchQuery];
+    }
+
+    const [total_items, users] = await Promise.all([
+      this.userModel.countDocuments(query),
+      this.userModel
+        .find(query)
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .exec(),
+    ]);
+
+    return {
+      users,
+      pagination: {
+        total_items,
+        total_pages: Math.ceil(total_items / limit),
+        current_page: page,
+        limit,
+      },
+    };
+  }
+
+  async existsByEmail(email: string): Promise<boolean> {
+    return !!(await this.userModel.exists({ email }));
   }
 }

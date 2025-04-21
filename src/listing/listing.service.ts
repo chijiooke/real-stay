@@ -1,13 +1,16 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model, Types } from 'mongoose';
+import { SavedListingResponse } from './interfaces/listing.types';
 import { Listing, ListingDocument } from './schemas/listing.schema';
 import { SavedListing, SavedListingDocument } from './schemas/savedListings';
-import { SavedListingResponse } from './interfaces/listing.types';
+import { buildSearchQuery } from 'src/utils/helpers';
 
 @Injectable()
 export class ListingService {
@@ -38,14 +41,24 @@ export class ListingService {
 
   //To Do: hide password from response
   async getListing(listingId: string): Promise<ListingDocument | null> {
+    if (!Types.ObjectId.isValid(listingId)) {
+      throw new BadRequestException('invalid id');
+    }
+
+    const id = new Types.ObjectId(listingId);
     const result = await this.listingModel.aggregate([
       {
-        $match: { _id: new Types.ObjectId(listingId) },
+        $match: { _id: id },
+      },
+      {
+        $addFields: {
+          ownerObjectId: { $toObjectId: '$owner_id' },
+        },
       },
       {
         $lookup: {
           from: 'users',
-          localField: 'owner_id',
+          localField: 'ownerObjectId',
           foreignField: '_id',
           as: 'owner',
         },
@@ -72,20 +85,53 @@ export class ListingService {
       limit: number;
     };
   }> {
-    const query: FilterQuery<Listing> = { ...filter };
+    const baseMatchStage: any = { ...filter };
 
+    const pipeline: any[] = [
+      { $match: baseMatchStage },
+      {
+        $addFields: {
+          ownerObjectId: { $toObjectId: '$owner_id' },
+        },
+      },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'ownerObjectId',
+          foreignField: '_id',
+          as: 'owner',
+        },
+      },
+      {
+        $unwind: {
+          path: '$owner',
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+    ];
+
+    // 🔍 Use utility function to build search query
     if (search) {
-      query.google_formatted_address = { $regex: search, $options: 'i' };
+      const searchQuery = buildSearchQuery(search, [
+        'google_formatted_address',
+        'owner.first_name',
+        'owner.last_name',
+        'owner.email',
+      ]);
+
+      pipeline.push({ $match: searchQuery });
     }
 
-    const [total_items, listings] = await Promise.all([
-      this.listingModel.countDocuments(query),
-      this.listingModel
-        .find(query)
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .exec(),
-    ]);
+    pipeline.push({
+      $facet: {
+        data: [{ $skip: (page - 1) * limit }, { $limit: limit }],
+        totalCount: [{ $count: 'count' }],
+      },
+    });
+
+    const result = await this.listingModel.aggregate(pipeline);
+    const listings = result[0]?.data || [];
+    const total_items = result[0]?.totalCount[0]?.count || 0;
 
     return {
       listings,
@@ -108,6 +154,12 @@ export class ListingService {
     listingId: string,
     userId: string,
   ): Promise<SavedListingDocument> {
+    const listing = await this.getListing(listingId);
+
+    if (!listing) {
+      throw new NotFoundException("listing doesn't exist");
+    }
+
     // Find if the user already has a saved listings document
     let savedListing = await this.savedListingModel.findOne({
       user_id: userId,
