@@ -19,6 +19,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly authService: AuthService,
   ) {}
 
+  private connectedUsers: Map<string, string> = new Map();
+
   async handleConnection(client: Socket) {
     const token = client.handshake.query.token as string;
     console.log(`🟡 Client attempting connection: ${client.id}`);
@@ -31,6 +33,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       const user = await this.authService.verifyToken(token);
       client.data.user = user;
+
+      // Save the userId to socketId mapping
+      this.connectedUsers.set(user.id, client.id);
       console.log(`✅ Client connected: ${client.id}, userId: ${user.id}`);
     } catch (err) {
       console.error(
@@ -47,21 +52,31 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   handleDisconnect(client: Socket): void {
+    for (const [userId, socketId] of this.connectedUsers.entries()) {
+      if (socketId === client.id) {
+        this.connectedUsers.delete(userId);
+        console.log(`🔌 Client disconnected: ${client.id}, userId: ${userId}`);
+        break;
+      }
+    }
     console.log(`🔴 Client disconnected: ${client.id}`);
   }
 
   @SubscribeMessage('send_message')
   async handleMessage(
-    @MessageBody() data: SendMessageDto,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    @MessageBody() data: any,
     @ConnectedSocket() client: Socket,
   ) {
+    console.log('sending event+++++');
     const sender = client.data.user;
     if (!sender) {
       console.warn('⚠️ Sender info missing in socket. Ignoring message.');
       return;
     }
 
-    console.log({ data });
+    // console.log({ data: JSON.parse(data) });
+    data = JSON.parse(data) as SendMessageDto;
     try {
       const message = await this.chatService.saveMessage(
         sender.id,
@@ -71,7 +86,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         data.fileType,
       );
 
-      client.broadcast.emit('receive_message', message);
+      const receiverSocketId = this.connectedUsers.get(data.receiverId);
+      if (receiverSocketId) {
+        client.to(receiverSocketId).emit('receive_message', message);
+      } else {
+        console.log('❗️Receiver not online:', message.receiverId);
+      }
+
       return { status: 'sent', message };
     } catch (err) {
       console.error('❌ Error sending message:', err.message);
