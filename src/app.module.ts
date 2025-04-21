@@ -4,6 +4,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { UsersModule } from './users/users.module';
 import { ListingModule } from './listing/listing.module';
 import { ChatModule } from './chat/chat.module';
+import { UploadModule } from './utility-modules/utility.module';
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/';
 const DB_NAME = process.env.DB_NAME || 'real-stay';
@@ -14,6 +15,7 @@ const DB_NAME = process.env.DB_NAME || 'real-stay';
     UsersModule,
     ListingModule,
     ChatModule,
+    UploadModule,
   ],
 })
 export class AppModule {}

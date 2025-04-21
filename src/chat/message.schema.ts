@@ -1,6 +1,17 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
 
+export class UserMeta {
+  @Prop({ required: true })
+  first_name: string;
+
+  @Prop({ required: true })
+  last_name: string;
+
+  @Prop({ type: String, default: null })
+  image_url: string | undefined;
+}
+
 @Schema()
 export class Message extends Document {
   @Prop({ required: true })
@@ -8,6 +19,9 @@ export class Message extends Document {
 
   @Prop({ required: true })
   receiverId: string;
+
+  @Prop({ required: true })
+  conversationId: string;
 
   @Prop()
   content?: string;
@@ -29,4 +43,3 @@ export class Message extends Document {
 }
 
 export const MessageSchema = SchemaFactory.createForClass(Message);
-

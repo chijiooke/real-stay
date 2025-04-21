@@ -37,6 +37,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         `❌ Token verification failed for ${client.id}:`,
         err.message,
       );
+      // return { status: 'failed', message: err.message };
       return client.disconnect();
     }
 
@@ -60,6 +61,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return;
     }
 
+    console.log({ data });
     try {
       const message = await this.chatService.saveMessage(
         sender.id,
@@ -82,7 +84,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() data: ReadMessageDto,
     @ConnectedSocket() client: Socket,
   ) {
-    console.log({ data: data.senderId});
+    console.log({ data: data.senderId });
     try {
       if (!data.senderId || data?.senderId?.trim() === '') {
         throw new Error('Sender id required');

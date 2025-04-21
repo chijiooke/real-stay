@@ -19,7 +19,18 @@ export class ListingController {
   constructor(private readonly listingService: ListingService) {}
 
   @Post('create')
-  create(@Body() payload: Listing) {
+  @UseGuards(JwtAuthGuard)
+  create(
+    @Body() payload: Listing,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    @Request() authData: any,
+  ) {
+    console.log({ payload });
+    payload.owner_id = authData.user._id;
+    payload.location = {
+      type: 'Point',
+      coordinates: [payload.lng, payload.lat],
+    };
     return this.listingService.createListing(payload);
   }
 
