@@ -9,7 +9,6 @@ import {
   Patch,
   Query,
   Request,
-  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/auth/jwtAuthGuard';
@@ -87,19 +86,25 @@ export class UsersController {
     @Request() authData: any,
     @Param('id') id: string,
   ) {
-    const authUser: UserDocument = authData.user;
+    // const authUser: UserDocument = authData.user;
 
     //only allow admins update other user details
-    if (
-      authUser._id.toString() !== id &&
-      authUser.user_type != UserTypeEnum.ADMIN
-    ) {
-      throw new UnauthorizedException(
-        "You don't have access to other user's information, contact admin",
-      );
+    // if (
+    //   authUser._id.toString() !== id &&
+    //   authUser.user_type != UserTypeEnum.ADMIN
+    // ) {
+    //   throw new UnauthorizedException(
+    //     "You don't have access to other user's information, contact admin",
+    //   );
+    // }
+
+    const user = await this.userService.findById(id);
+    if (!user) {
+      throw new BadRequestException('failed to get user');
     }
 
-    return this.userService.findById(id);
+    user.password = '';
+    return user;
   }
 
   @Get('/check-email-availability')
