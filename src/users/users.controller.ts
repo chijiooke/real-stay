@@ -79,34 +79,6 @@ export class UsersController {
     );
   }
 
-  @Get(':id')
-  @UseGuards(JwtAuthGuard)
-  async getUserById(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    @Request() authData: any,
-    @Param('id') id: string,
-  ) {
-    // const authUser: UserDocument = authData.user;
-
-    //only allow admins update other user details
-    // if (
-    //   authUser._id.toString() !== id &&
-    //   authUser.user_type != UserTypeEnum.ADMIN
-    // ) {
-    //   throw new UnauthorizedException(
-    //     "You don't have access to other user's information, contact admin",
-    //   );
-    // }
-
-    const user = await this.userService.findById(id);
-    if (!user) {
-      throw new BadRequestException('failed to get user');
-    }
-
-    user.password = '';
-    return user;
-  }
-
   @Get('/check-email-availability')
   async check(@Query('email') email: string) {
     if (!email) {
@@ -116,5 +88,21 @@ export class UsersController {
     const userExists = await this.userService.existsByEmail(email);
 
     return { user_exist: userExists };
+  }
+
+  @Get(':id')
+  @UseGuards(JwtAuthGuard)
+  async getUserById(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    @Request() authData: any,
+    @Param('id') id: string,
+  ) {
+    const user = await this.userService.findById(id);
+    if (!user) {
+      throw new BadRequestException('failed to get user');
+    }
+
+    user.password = '';
+    return user;
   }
 }
