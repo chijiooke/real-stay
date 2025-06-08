@@ -5,9 +5,9 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { FilterQuery, Model, Types } from 'mongoose';
+import { FilterQuery, Model, PipelineStage, Types } from 'mongoose';
 import { User, UserDocument } from './schemas/user.schema';
-import { buildSearchQuery } from 'src/utils/helpers';
+import { buildSearchQuery, getPagingParameters } from 'src/utils/helpers';
 
 @Injectable()
 export class UsersService {
@@ -84,12 +84,7 @@ export class UsersService {
       .exec();
   }
 
-  async getUsers(
-    filter: FilterQuery<User>,
-    search?: string,
-    page: number = 1,
-    limit: number = 10,
-  ): Promise<{
+  async getUsers(filter: FilterQuery<User>): Promise<{
     users: UserDocument[];
     pagination: {
       total_items: number;
@@ -98,37 +93,127 @@ export class UsersService {
       limit: number;
     };
   }> {
-    const query: FilterQuery<User> = { ...filter };
+    let searchStr: string | undefined;
+    if (filter['search']) {
+      searchStr = filter['search'];
+      delete filter['search'];
+    }
 
-    if (search) {
-      const searchQuery = buildSearchQuery(search, [
+    const { skip, limit, currentPage } = getPagingParameters(filter);
+
+    const matchStage: FilterQuery<User> = { ...filter };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pipeline: any[] = [];
+
+    // Step 1: Match basic filters
+    pipeline.push({ $match: matchStage });
+
+    // Step 2: Search filter using $or
+    if (searchStr) {
+      const searchQuery = buildSearchQuery(searchStr, [
         'first_name',
         'last_name',
         'email',
         'phone_number',
       ]);
-      query.$and = [searchQuery];
+      pipeline.push({ $match: searchQuery });
     }
 
-    const [total_items, users] = await Promise.all([
-      this.userModel.countDocuments(query),
-      this.userModel
-        .find(query)
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .exec(),
-    ]);
+    pipeline.push({
+      $lookup: {
+        from: 'reviews',
+        localField: '_id',
+        foreignField: 'property_owner_id',
+        as: 'reviews',
+      },
+    });
+    pipeline.push({
+      $addFields: {
+        average_rating: {
+          $cond: [
+            { $gt: [{ $size: '$reviews' }, 0] },
+            { $avg: '$reviews.rating_score' },
+            null,
+          ],
+        },
+      },
+    });
+    pipeline.push({
+      $project: {
+        reviews: 0, // exclude reviews array
+      },
+    });
+
+    // Step 3: Facet for pagination and count
+    pipeline.push({
+      $facet: {
+        data: [{ $skip: skip }, { $limit: limit }],
+        totalCount: [{ $count: 'count' }],
+      },
+    });
+
+    // Step 4: Run aggregation
+    const result = await this.userModel.aggregate(pipeline).exec();
+
+    const users = result[0]?.data || [];
+    const total_items = result[0]?.totalCount?.[0]?.count || 0;
 
     return {
       users,
       pagination: {
         total_items,
         total_pages: Math.ceil(total_items / limit),
-        current_page: page,
+        current_page: currentPage,
         limit,
       },
     };
   }
+
+  async getUser(id: string): Promise<{ user: UserDocument | null }> {
+    const pipeline: PipelineStage[] = [
+      // Match the user by ID
+      {
+        $match: {
+          _id: new Types.ObjectId(id),
+        },
+      },
+      // Join reviews where this user is the property owner
+      {
+        $lookup: {
+          from: 'reviews',
+          localField: '_id',
+          foreignField: 'property_owner_id',
+          as: 'reviews',
+        },
+      },
+      // Calculate average rating score
+      {
+        $addFields: {
+          average_rating: {
+            $cond: [
+              { $gt: [{ $size: '$reviews' }, 0] },
+              { $avg: '$reviews.rating_score' },
+              null,
+            ],
+          },
+        },
+      },
+      // Exclude full reviews array
+      {
+        $project: {
+          reviews: 0,
+        },
+      },
+    ];
+  
+    const result = await this.userModel.aggregate(pipeline).exec();
+    const user = result[0] || null;
+  
+    return {
+      user,
+    };
+  }
+  
 
   async existsByEmail(email: string): Promise<boolean> {
     return !!(await this.userModel.exists({ email }));

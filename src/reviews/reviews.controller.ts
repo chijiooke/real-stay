@@ -47,9 +47,9 @@ export class ReviewsController {
     return this.ratingService.getReviews(filter);
   }
 
-  @Get('/:ratingId')
+  @Get('/:id')
   @UseGuards(JwtAuthGuard)
-  async getByListingId(@Param('ratingID') ratingID: string) {
-    return this.ratingService.getReview(ratingID);
+  async getByListingId(@Param('id') reviewId: string) {
+    return this.ratingService.getReview(reviewId);
   }
 }
