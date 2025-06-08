@@ -34,3 +34,25 @@ export function normalizeObjectIdFields(
 
   return normalizedFilter;
 }
+
+export function getPagingParameters(filter: Record<string, string> = {}): {
+  currentPage: number;
+  skip: number;
+  limit: number;
+} {
+  let page: number = 1;
+  let limit: number = 10;
+
+  if (filter['page_size']) {
+    limit = parseInt(filter['page_size'], 10);
+    delete filter['page_size']; // Remove limit from filter to avoid conflicts
+  }
+
+  if (filter['page']) {
+    page = parseInt(filter['page'], 10);
+    delete filter['page']; // Remove page from filter to avoid conflicts
+  }
+
+  const skip = (page - 1) * limit;
+  return { skip, limit, currentPage: page };
+}

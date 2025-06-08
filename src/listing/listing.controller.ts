@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
@@ -8,7 +7,7 @@ import {
   Post,
   Query,
   Request,
-  UseGuards,
+  UseGuards
 } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/auth/jwtAuthGuard';
 import { ListingService } from './listing.service';
@@ -50,42 +49,16 @@ export class ListingController {
 
   @Get('saved_listings')
   @UseGuards(JwtAuthGuard)
-  async getSaved(
-    @Request() req,
-    @Query('filter') filter: string,
-    @Query('search') search: string,
-  ) {
+  async getSaved(@Request() req, @Query() filter: Record<string, string>) {
     const userId: string = req.user._id;
 
-    // Parse the filter from the query string if necessary
-    let parsedFilter;
-    try {
-      parsedFilter = filter ? JSON.parse(filter) : {};
-    } catch (error) {
-      console.log(error);
-      throw new BadRequestException('Invalid filter format');
-    }
-
-    return this.listingService.getSavedListing(userId, parsedFilter, search);
+    return this.listingService.getSavedListing(userId, filter);
   }
 
   @Get('')
   @UseGuards(JwtAuthGuard)
-  async get(
-    @Request() req,
-    @Query('filter') filter: string,
-    @Query('search') search: string,
-  ) {
-    // Parse the filter from the query string if necessary
-    let parsedFilter;
-    try {
-      parsedFilter = filter ? JSON.parse(filter) : {};
-    } catch (error) {
-      console.log(error);
-      throw new BadRequestException('Invalid filter format');
-    }
-
-    return this.listingService.getListings(parsedFilter, search);
+  async get(@Query() filter: Record<string, string>) {
+    return this.listingService.getListings(filter);
   }
 
   @Get('/:listingId')
