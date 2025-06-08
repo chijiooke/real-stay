@@ -10,7 +10,7 @@ import { FilterQuery, Model, Types } from 'mongoose';
 import { SavedListingResponse } from './interfaces/listing.types';
 import { Listing, ListingDocument } from './schemas/listing.schema';
 import { SavedListing, SavedListingDocument } from './schemas/savedListings';
-import { buildSearchQuery } from 'src/utils/helpers';
+import { buildSearchQuery, getPagingParameters } from 'src/utils/helpers';
 
 @Injectable()
 export class ListingService {
@@ -71,12 +71,7 @@ export class ListingService {
     return result.length > 0 ? result[0] : null;
   }
 
-  async getListings(
-    filter: FilterQuery<Listing>,
-    search?: string,
-    page: number = 1,
-    limit: number = 10,
-  ): Promise<{
+  async getListings(filter: FilterQuery<Listing>): Promise<{
     listings: ListingDocument[];
     pagination: {
       total_items: number;
@@ -85,6 +80,13 @@ export class ListingService {
       limit: number;
     };
   }> {
+    let searchStr;
+    if (filter['search']) {
+      searchStr = filter['search'];
+      delete filter['search']; // Remove search from filter to avoid conflicts
+    }
+
+    const { skip, limit, currentPage } = getPagingParameters(filter);
     const baseMatchStage: any = { ...filter };
 
     const pipeline: any[] = [
@@ -111,8 +113,8 @@ export class ListingService {
     ];
 
     // 🔍 Use utility function to build search query
-    if (search) {
-      const searchQuery = buildSearchQuery(search, [
+    if (searchStr) {
+      const searchQuery = buildSearchQuery(searchStr, [
         'google_formatted_address',
         'owner.first_name',
         'owner.last_name',
@@ -124,7 +126,7 @@ export class ListingService {
 
     pipeline.push({
       $facet: {
-        data: [{ $skip: (page - 1) * limit }, { $limit: limit }],
+        data: [{ $skip: skip }, { $limit: limit }],
         totalCount: [{ $count: 'count' }],
       },
     });
@@ -138,7 +140,7 @@ export class ListingService {
       pagination: {
         total_items,
         total_pages: Math.ceil(total_items / limit),
-        current_page: page,
+        current_page: currentPage,
         limit,
       },
     };
@@ -221,65 +223,43 @@ export class ListingService {
   async getSavedListing(
     userId: string,
     filter: FilterQuery<Listing>,
-    search?: string,
-    page: number = 1,
-    limit: number = 10,
   ): Promise<SavedListingResponse> {
-    const usersSavedListingsRecord = await this.savedListingModel.findOne({
-      user_id: userId,
-    });
-
-    // If no saved listings exist for the user, return an empty array and pagination metadata
-    if (!usersSavedListingsRecord?.saved_listings) {
-      return {
-        listings: [],
-        pagination: {
-          total_items: 0,
-          total_pages: 0,
-          current_page: page,
-          limit,
-        },
-      };
+    const { skip, limit, currentPage } = getPagingParameters(filter);
+  
+    const savedRecord = await this.savedListingModel.findOne({ user_id: userId }, { saved_listings: 1 });
+  
+    // No saved listings for the user
+    const savedIds = savedRecord?.saved_listings ?? [];
+    if (!savedIds.length) {
+      return emptyListingResponse(currentPage, limit);
     }
-
-    // Get all listings from the saved listings record using their IDs
-    let query: FilterQuery<Listing> = {
-      _id: { $in: usersSavedListingsRecord.saved_listings },
+  
+    const { search, ...restFilter } = filter;
+    const query: FilterQuery<Listing> = {
+      _id: { $in: savedIds },
+      ...restFilter,
+      ...(search && {
+        user_id: userId,
+        google_formatted_address: { $regex: search, $options: 'i' },
+      }),
     };
-
-    // Apply the provided filter (if any)
-    if (filter) {
-      query = { ...query, ...filter };
-    }
-
-    // Apply partial text search if the search string is provided
-    if (search) {
-      query['google_formatted_address'] = { $regex: search, $options: 'i' }; // Case-insensitive search in 'address'
-    }
-
-    // Calculate pagination
-    const total_items = await this.listingModel.countDocuments(query); // Get total count of listings that match the query
-    const total_pages = Math.ceil(total_items / limit); // Calculate total pages
-    const skip = (page - 1) * limit; // Calculate the number of records to skip based on the page number
-
-    // Get the paginated listings
-    const listings = await this.listingModel
-      .find(query)
-      .skip(skip)
-      .limit(limit)
-      .exec();
-
-    // Return the listings along with pagination metadata
+  
+    const [total_items, listings] = await Promise.all([
+      this.listingModel.countDocuments(query),
+      this.listingModel.find(query).skip(skip).limit(limit).exec(),
+    ]);
+  
     return {
       listings,
       pagination: {
         total_items,
-        total_pages,
-        current_page: page,
+        total_pages: Math.ceil(total_items / limit),
+        current_page: currentPage,
         limit,
       },
     };
   }
+  
 
   async updateById(
     id: string,
@@ -298,4 +278,16 @@ export class ListingService {
       .findOneAndUpdate(filter, payload, { new: true })
       .exec();
   }
+}
+
+function emptyListingResponse(currentPage: number, limit: number): SavedListingResponse {
+  return {
+    listings: [],
+    pagination: {
+      total_items: 0,
+      total_pages: 0,
+      current_page: currentPage,
+      limit,
+    },
+  };
 }
