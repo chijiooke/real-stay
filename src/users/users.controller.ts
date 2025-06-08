@@ -49,34 +49,8 @@ export class UsersController {
 
   @Get()
   @UseGuards(JwtAuthGuard)
-  async get(
-    @Query('filter') filter?: string,
-    @Query('search') search?: string,
-    @Query('page') page = '1',
-    @Query('limit') limit = '10',
-  ) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let parsedFilter: Record<string, any> = {};
-    if (filter) {
-      try {
-        parsedFilter = JSON.parse(filter);
-      } catch (error) {
-        console.log(error);
-        throw new BadRequestException(
-          'Invalid filter format. Must be valid JSON.',
-        );
-      }
-    }
-
-    const pageFilter = Math.max(1, parseInt(page, 10) || 1);
-    const limitFilter = Math.min(100, parseInt(limit, 10) || 10); // Optional cap at 100
-
-    return this.userService.getUsers(
-      parsedFilter,
-      search?.trim() || '',
-      pageFilter,
-      limitFilter,
-    );
+  async get(@Query() filter: Record<string, string>) {
+    return this.userService.getUsers(filter);
   }
 
   @Get('/check-email-availability')
@@ -97,12 +71,12 @@ export class UsersController {
     @Request() authData: any,
     @Param('id') id: string,
   ) {
-    const user = await this.userService.findById(id);
-    if (!user) {
+    const user = await this.userService.getUser(id);
+    if (!user.user) {
       throw new BadRequestException('failed to get user');
     }
 
-    user.password = '';
+    user.user.password = '';
     return user;
   }
 }

@@ -66,7 +66,32 @@ export class ListingService {
       {
         $unwind: { path: '$owner', preserveNullAndEmptyArrays: true },
       },
+      {
+        $lookup: {
+          from: 'reviews',
+          localField: '_id',
+          foreignField: 'listing_id',
+          as: 'reviews',
+        },
+      },
+      {
+        $addFields: {
+          average_rating: {
+            $cond: [
+              { $gt: [{ $size: '$reviews' }, 0] },
+              { $avg: '$reviews.rating_score' },
+              null,
+            ],
+          },
+        },
+      },
+      {
+        $project: {
+          reviews: 0, // exclude reviews array
+        },
+      },
     ]);
+    
 
     return result.length > 0 ? result[0] : null;
   }
@@ -108,6 +133,30 @@ export class ListingService {
         $unwind: {
           path: '$owner',
           preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $lookup: {
+          from: 'reviews',
+          localField: '_id',
+          foreignField: 'listing_id',
+          as: 'reviews',
+        },
+      },
+      {
+        $addFields: {
+          average_rating: {
+            $cond: [
+              { $gt: [{ $size: '$reviews' }, 0] },
+              { $avg: '$reviews.rating_score' },
+              null,
+            ],
+          },
+        },
+      },
+      {
+        $project: {
+          reviews: 0, // exclude reviews array
         },
       },
     ];
