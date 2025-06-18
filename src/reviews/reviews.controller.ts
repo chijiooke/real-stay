@@ -43,7 +43,6 @@ export class ReviewsController {
   @Get('')
   @UseGuards(JwtAuthGuard)
   async get(@Query() filter: Record<string, string>) {
-
     return this.ratingService.getReviews(filter);
   }
 
