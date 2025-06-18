@@ -69,6 +69,9 @@ export class Listing extends Document {
 
   @Prop({ type: [String], required: true })
   photos: string[];
+
+  @Prop({ default: 'active', enum: ['active', 'inactive'] }) // Set default & restrict values
+  status: string;
 }
 
 export const ListingSchema = SchemaFactory.createForClass(Listing);

@@ -32,6 +32,9 @@ export class User {
 
   @Prop({ default: 'guest', enum: ['host', 'guest', 'admin'] }) // Set default & restrict values
   user_type?: string;
+
+  @Prop({ default: 'active', enum: ['active', 'inactive'] }) // Set default & restrict values
+  status?: string;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

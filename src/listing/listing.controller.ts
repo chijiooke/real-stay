@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -7,9 +8,10 @@ import {
   Post,
   Query,
   Request,
-  UseGuards
+  UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/auth/jwtAuthGuard';
+import { UserStatusEnum } from 'src/users/interfaces/user.types';
 import { ListingService } from './listing.service';
 import { Listing } from './schemas/listing.schema';
 
@@ -45,6 +47,38 @@ export class ListingController {
   async unsave(@Param('listingId') listingId: string, @Request() req) {
     const userId: string = req.user._id;
     return this.listingService.unsaveListing(listingId, userId);
+  }
+
+  @Patch('review/:listingId/:action')
+  @UseGuards(JwtAuthGuard)
+  async review(
+    @Param('listingId') listingId: string,
+    @Param('action') action: string,
+  ) {
+    if (!listingId || listingId == '' || listingId == ':listingId') {
+      throw new BadRequestException('listing id is required');
+    }
+
+    const listing = await this.listingService.getListing(listingId);
+
+    if (!listing) {
+      throw new BadRequestException('invalid id');
+    }
+
+    switch (action?.toLowerCase()) {
+      case 'activate':
+        listing.status = UserStatusEnum.ACTIVE;
+        break;
+
+      case 'deactivate':
+        listing.status = UserStatusEnum.INACTIVE;
+        break;
+
+      default:
+        throw new BadRequestException('invalid action');
+    }
+
+    return this.listingService.updateById(listingId, listing);
   }
 
   @Get('saved_listings')

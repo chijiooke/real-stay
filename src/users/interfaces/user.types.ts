@@ -3,3 +3,8 @@ export enum UserTypeEnum {
   HOST = 'host',
   GUEST = 'guest',
 }
+
+export enum UserStatusEnum {
+  ACTIVE = 'active',
+  INACTIVE = 'inactive',
+}
