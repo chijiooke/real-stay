@@ -105,44 +105,144 @@ export class ChatService {
     );
   }
 
+  // userA is represents the the device owner
   async getConversation(userA: string, userB: string) {
-    console.log({ userA, userB });
-    return this.messageModel
-      .find({
-        $or: [
-          { senderId: userA, receiverId: userB },
-          { senderId: userB, receiverId: userA },
-        ],
-      })
-      .sort({ timestamp: 1 });
-  }
-
-  async getConversations(userA: string) {
+    console.log();
     return this.messageModel.aggregate([
       {
         $match: {
-          receiverId: userA,
+          $or: [
+            { senderId: userA, receiverId: userB },
+            { senderId: userB, receiverId: userA },
+          ],
+        },
+      },
+      {
+        $addFields: {
+          recipientId: {
+            $cond: [{ $eq: ['$senderId', userA] }, userB, userA],
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: 'users',
+          let: { recipientIdStr: '$recipientId' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $eq: ['$_id', { $toObjectId: '$$recipientIdStr' }],
+                },
+              },
+            },
+            {
+              $project: {
+                recipient_first_name: '$first_name',
+                recipient_last_name: '$last_name',
+                recipient_email: '$email',
+                recipient_phone: '$phone_number',
+                image_url: '$image_url',
+              },
+            },
+          ],
+          as: 'recipientInfo',
+        },
+      },
+      {
+        $unwind: {
+          path: '$recipientInfo',
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $addFields: {
+          recipientMetadata: '$recipientInfo',
+        },
+      },
+      {
+        $project: {
+          recipientInfo: 0, // clean up
         },
       },
       {
         $sort: {
-          timestamp: -1,
+          timestamp: 1,
+        },
+      },
+    ]);
+  }
+
+  // userA is represents the the device owner
+  async getConversations(userA: string) {
+    // const userAObjectId = new Types.ObjectId(userA);
+
+    return this.messageModel.aggregate([
+      {
+        $match: {
+          $or: [{ senderId: userA }, { receiverId: userA }],
         },
       },
       {
+        $addFields: {
+          otherUserId: {
+            $cond: [{ $eq: ['$senderId', userA] }, '$receiverId', '$senderId'],
+          },
+        },
+      },
+      {
+        $sort: { timestamp: -1 },
+      },
+      {
         $group: {
-          _id: '$senderId',
+          _id: '$otherUserId',
           messageId: { $first: '$_id' },
-          senderId: { $first: '$senderId' },
-          receiverId: { $first: '$receiverId' },
-          sender: { $first: '$sender' }, // 👈 includes fullname & image
-          receiver: { $first: '$receiver' }, // (optional) include if needed
           content: { $first: '$content' },
           fileUrl: { $first: '$fileUrl' },
           fileType: { $first: '$fileType' },
           timestamp: { $first: '$timestamp' },
           read: { $first: '$read' },
           readAt: { $first: '$readAt' },
+          senderId: { $first: '$senderId' },
+          receiverId: { $first: '$receiverId' },
+        },
+      },
+      {
+        $lookup: {
+          from: 'users',
+          let: { otherIdStr: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $eq: ['$_id', { $toObjectId: '$$otherIdStr' }],
+                },
+              },
+            },
+          ],
+          as: 'otherUser',
+        },
+      },
+      {
+        $unwind: {
+          path: '$otherUser',
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $addFields: {
+          recipientMetadata: {
+            recipient_first_name: '$otherUser.first_name',
+            recipient_last_name: '$otherUser.last_name',
+            recipient_email: '$otherUser.email',
+            recipient_phone: '$otherUser.phone_number',
+            image_url: '$otherUser.image_url',
+          },
+        },
+      },
+      {
+        $project: {
+          otherUser: 0, // optional: remove raw user object
         },
       },
       {

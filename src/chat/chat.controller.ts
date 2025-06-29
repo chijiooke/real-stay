@@ -54,8 +54,6 @@ export class ChatController {
   @Get('messages/:userId')
   async getConversation(@Req() req: Request, @Param('userId') userId: string) {
     const me = req.user as { _id: string };
-
-    console.log({ me });
     return this.chatService.getConversation(me._id.toString(), userId);
   }
 
