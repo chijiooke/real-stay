@@ -11,10 +11,7 @@ export class Conversation extends Document {
   receiverId: string;
 
   @Prop({ required: true })
-  sender: UserMeta;
-
-  @Prop({ required: true })
-  receiver: UserMeta;
+  recipientMetaData: UserMeta;
 
 }
 

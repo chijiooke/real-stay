@@ -12,6 +12,26 @@ export class UserMeta {
   image_url: string | undefined;
 }
 
+export type MessageDocument = Message & Document;
+
+@Schema({ _id: false })
+class RecipientMetadata {
+  @Prop()
+  recipient_name?: string;
+
+  @Prop()
+  recipient_email?: string;
+
+  @Prop()
+  recipient_phone?: string;
+
+  @Prop()
+  image_url?: string;
+}
+
+export const RecipientMetadataSchema =
+  SchemaFactory.createForClass(RecipientMetadata);
+
 @Schema()
 export class Message extends Document {
   @Prop({ required: true })
@@ -40,6 +60,9 @@ export class Message extends Document {
 
   @Prop({ default: Date.now })
   timestamp: Date;
+
+  @Prop({ type: RecipientMetadataSchema })
+  recipientMetadata?: RecipientMetadata;
 }
 
 export const MessageSchema = SchemaFactory.createForClass(Message);
