@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import * as cloudinary from 'cloudinary';
 import { Request } from 'express';
 import * as formidable from 'formidable';
+import { MailService } from 'src/utility-services/mail.service';
 // import { promisify } from 'util';
 
 cloudinary.v2.config({
@@ -13,6 +14,8 @@ cloudinary.v2.config({
 
 @Injectable()
 export class UtilityService {
+  constructor(private readonly mailService: MailService) {}
+
   async uploadFromRequest(req: Request) {
     const form = new formidable.IncomingForm({
       multiples: false,
@@ -36,5 +39,15 @@ export class UtilityService {
       url: uploadResult.secure_url,
       fileType: uploadResult.resource_type,
     };
+  }
+
+  async testEmail() {
+    await this.mailService.sendTemplateEmail({
+      to: 'silva.chijioke.michael@gmail.com',
+      subject: 'Welcome to Real Stay!',
+      templateName: 'welcome',
+      replacements: { name: 'Edge Tech' },
+    });
+    
   }
 }

@@ -6,7 +6,7 @@ import { PassportModule } from '@nestjs/passport';
 import { JwtStrategy } from './jwt.strategy';
 import { AuthController } from './auth.controller';
 import { RedisService } from 'src/utility-services/redis';
-import { MailService } from 'src/utility-services/nodemailer';
+import { MailService } from 'src/utility-services/mail.service';
 
 @Module({
   imports: [

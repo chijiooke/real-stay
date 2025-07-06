@@ -9,7 +9,7 @@ import * as bcrypt from 'bcryptjs';
 import { User, UserDocument } from '../users/schemas/user.schema';
 import { UsersService } from '../users/users.service';
 import { RedisService } from 'src/utility-services/redis';
-import { MailService } from 'src/utility-services/nodemailer';
+import { MailService } from 'src/utility-services/mail.service';
 import { generateOtp } from 'src/utils/helpers';
 import { OAuth2Client } from 'google-auth-library';
 
@@ -27,7 +27,6 @@ export class AuthService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async verifyToken(token: string): Promise<any> {
     try {
-      
       return await this.jwtService.verifyAsync(token);
     } catch (error) {
       console.log('Authenticated user error:', error);
@@ -63,8 +62,7 @@ export class AuthService {
     user: Partial<UserDocument>;
     access_token: string;
   } {
-
-    console.log({user})
+    console.log({ user });
     return {
       user: user,
       access_token: this.jwtService.sign({ id: user.id, email: user.email }),
@@ -131,15 +129,15 @@ export class AuthService {
     const otp = generateOtp(5);
 
     await this.redisService.set(key, otp, 300);
-    await this.mailService.sendTemplateEmail(
-      email,
-      'Password Reset',
-      'forgot-password',
-      {
+    await this.mailService.sendTemplateEmail({
+      to: email,
+      subject: 'Password Reset',
+      templateName: 'forgot-password',
+      replacements: {
         otp,
         url: 'http://localhost:3000/reset-password',
       },
-    );
+    });
 
     return { message: 'Otp sent to email successfully' };
   }
