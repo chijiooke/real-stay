@@ -13,4 +13,9 @@ export class UtilityController {
   async upload(@Req() req: Request) {
     return this.utilityService.uploadFromRequest(req);
   }
+
+  @Post('test-email')
+  async testemail() {
+    return this.utilityService.testEmail();
+  }
 }

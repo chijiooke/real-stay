@@ -4,7 +4,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { UsersModule } from './users/users.module';
 import { ListingModule } from './listing/listing.module';
 import { ChatModule } from './chat/chat.module';
-import { UploadModule } from './utility-modules/utility.module';
+import { UtilityModule } from './utility-modules/utility.module';
 import { ReviewModule } from './reviews/reviews.module';
 import { HealthModule } from './health/health.module';
 import { AnalyticsModule } from './analytics/analytics.module';
@@ -19,9 +19,10 @@ const DB_NAME = process.env.DB_NAME || 'real-stay';
     ListingModule,
     ReviewModule,
     ChatModule,
-    UploadModule,
+    UtilityModule,
     HealthModule,
-    AnalyticsModule
+    AnalyticsModule,
+    UtilityModule
   ],
 })
 export class AppModule {}

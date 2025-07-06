@@ -28,6 +28,8 @@
 
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import * as dotenv from 'dotenv';
+dotenv.config();
 // import { ResponseInterceptor } from './interceptors/response-interceptor';
 // import { GlobalExceptionFilter } from './filters/http-exception.filter';
 
