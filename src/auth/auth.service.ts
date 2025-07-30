@@ -52,7 +52,17 @@ export class AuthService {
     password: string,
   ): Promise<Partial<UserDocument> | null> {
     const user = await this.usersService.findByEmail(email);
+
     if (!user || !(await bcrypt.compare(password, user.password))) {
+      if (user) {
+        console.log(
+          password,
+          email,
+          user.email,
+          user.password,
+          await bcrypt.compare(password, user.password),
+        );
+      }
       throw new UnauthorizedException('Invalid email or password');
     }
     return this.sanitizeUser(user);
@@ -62,7 +72,6 @@ export class AuthService {
     user: Partial<UserDocument>;
     access_token: string;
   } {
-    console.log({ user });
     return {
       user: user,
       access_token: this.jwtService.sign({ id: user.id, email: user.email }),

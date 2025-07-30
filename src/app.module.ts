@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
-import { AuthModule } from './auth/auth.module';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
+
+import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { ListingModule } from './listing/listing.module';
 import { ChatModule } from './chat/chat.module';
@@ -9,11 +11,23 @@ import { ReviewModule } from './reviews/reviews.module';
 import { HealthModule } from './health/health.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/';
-const DB_NAME = process.env.DB_NAME || 'real-stay';
 @Module({
   imports: [
-    MongooseModule.forRoot(MONGO_URI + DB_NAME),
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
+    MongooseModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => {
+        const uri = configService.get<string>('MONGO_URI') || 'mongodb://localhost:27017/';
+        const dbName = configService.get<string>('DB_NAME') || 'real-stay';
+        return {
+          uri: uri + dbName,
+        };
+      },
+      inject: [ConfigService],
+    }),
+
     AuthModule,
     UsersModule,
     ListingModule,
@@ -22,7 +36,6 @@ const DB_NAME = process.env.DB_NAME || 'real-stay';
     UtilityModule,
     HealthModule,
     AnalyticsModule,
-    UtilityModule
   ],
 })
 export class AppModule {}
