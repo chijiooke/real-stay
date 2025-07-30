@@ -29,7 +29,6 @@ export class AuthService {
     try {
       return await this.jwtService.verifyAsync(token);
     } catch (error) {
-      console.log('Authenticated user error:', error);
 
       throw new UnauthorizedException(
         error.name === 'TokenExpiredError'
@@ -54,15 +53,6 @@ export class AuthService {
     const user = await this.usersService.findByEmail(email);
 
     if (!user || !(await bcrypt.compare(password, user.password))) {
-      if (user) {
-        console.log(
-          password,
-          email,
-          user.email,
-          user.password,
-          await bcrypt.compare(password, user.password),
-        );
-      }
       throw new UnauthorizedException('Invalid email or password');
     }
     return this.sanitizeUser(user);
@@ -81,7 +71,6 @@ export class AuthService {
   async googleLogin(
     token: string,
   ): Promise<{ user: Partial<UserDocument>; access_token: string }> {
-    console.log(process.env.GOOGLE_CLIENT_ID);
 
     const ticket = await this.googleClient.verifyIdToken({
       idToken: token,
