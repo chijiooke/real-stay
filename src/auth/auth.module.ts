@@ -9,7 +9,6 @@ import { RedisService } from 'src/utility-services/redis';
 import { MailService } from 'src/utility-services/mail.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
-console.log('secret:', process.env.JWT_SECRET);
 @Module({
   imports: [
     UsersModule,
