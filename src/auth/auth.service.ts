@@ -29,7 +29,6 @@ export class AuthService {
     try {
       return await this.jwtService.verifyAsync(token);
     } catch (error) {
-
       throw new UnauthorizedException(
         error.name === 'TokenExpiredError'
           ? 'Token has expired'
@@ -71,7 +70,6 @@ export class AuthService {
   async googleLogin(
     token: string,
   ): Promise<{ user: Partial<UserDocument>; access_token: string }> {
-
     const ticket = await this.googleClient.verifyIdToken({
       idToken: token,
       audience: process.env.GOOGLE_CLIENT_ID,
@@ -177,6 +175,7 @@ export class AuthService {
       last_name: user.last_name,
       gender: user.gender,
       phone_number: user.phone_number,
+      image_url: user.image_url,
     };
   }
 
