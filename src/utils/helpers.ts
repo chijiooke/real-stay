@@ -56,3 +56,18 @@ export function getPagingParameters(filter: Record<string, string> = {}): {
   const skip = (page - 1) * limit;
   return { skip, limit, currentPage: page };
 }
+
+export function getAge(dobString) {
+  const today = new Date();
+  const dob = new Date(dobString);
+
+  let age = today.getFullYear() - dob.getFullYear();
+  const monthDiff = today.getMonth() - dob.getMonth();
+
+  // adjust if the birthday hasn't occurred yet this year
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+    age--;
+  }
+
+  return age;
+}
