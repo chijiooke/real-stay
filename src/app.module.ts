@@ -10,6 +10,7 @@ import { UtilityModule } from './utility-modules/utility.module';
 import { ReviewModule } from './reviews/reviews.module';
 import { HealthModule } from './health/health.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { KycModule } from './kyc/kyc.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
     UtilityModule,
     HealthModule,
     AnalyticsModule,
+    KycModule,
   ],
 })
 export class AppModule {}

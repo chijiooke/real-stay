@@ -30,6 +30,12 @@ export class User {
   @Prop({ default: null }) // Allow null but don't enforce requirement
   apple_id?: string;
 
+  @Prop({ default: null }) 
+  kyc_id?: string;
+
+  @Prop({ default: null }) 
+  has_completed_kyc?: false;
+
   @Prop({ default: 'guest', enum: ['host', 'guest', 'admin'] }) // Set default & restrict values
   user_type?: string;
 
