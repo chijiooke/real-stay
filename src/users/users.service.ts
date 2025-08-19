@@ -144,7 +144,13 @@ export class UsersService {
       },
     });
 
-    // Step 3: Facet for pagination and count
+    //Step3: sort latest
+    pipeline.push({
+      $sort: { createdAt: -1 },
+    });
+
+
+    // Step 4: Facet for pagination and count
     pipeline.push({
       $facet: {
         data: [{ $skip: skip }, { $limit: limit }],
@@ -152,7 +158,7 @@ export class UsersService {
       },
     });
 
-    // Step 4: Run aggregation
+    // Step 5: Run aggregation
     const result = await this.userModel.aggregate(pipeline).exec();
 
     const users = result[0]?.data || [];
