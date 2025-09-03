@@ -174,6 +174,10 @@ export class ListingService {
     }
 
     pipeline.push({
+      $sort: { createdAt: -1 },
+    });
+
+    pipeline.push({
       $facet: {
         data: [{ $skip: skip }, { $limit: limit }],
         totalCount: [{ $count: 'count' }],
