@@ -71,7 +71,7 @@ export class ReviewService {
     page: number = 1,
     limit: number = 10,
   ): Promise<{
-    listings: ReviewDocument[];
+    reviews: ReviewDocument[];
     pagination: {
       total_items: number;
       total_pages: number;
@@ -79,53 +79,55 @@ export class ReviewService {
       limit: number;
     };
   }> {
-    //handle search
+    // 🔍 handle search
     let searchStr;
     if (filter['search']) {
       searchStr = filter['search'];
       delete filter['search']; // Remove search from filter to avoid conflicts
     }
-
+  
+    // normalize ObjectId fields
     filter = normalizeObjectIdFields(filter, [
       'reviewer_id',
       'property_owner_id',
       'listing_id',
     ]);
+  
     const baseMatchStage: any = { ...filter };
-
+  
     const pipeline: any[] = [
       { $match: baseMatchStage },
+  
+      // Lookup owner without password
       {
         $lookup: {
           from: 'users',
-          localField: 'property_owner_id',
-          foreignField: '_id',
+          let: { ownerId: '$property_owner_id' },
+          pipeline: [
+            { $match: { $expr: { $eq: ['$_id', '$$ownerId'] } } },
+            { $project: { password: 0 } }, // exclude password
+          ],
           as: 'owner',
         },
       },
-      {
-        $unwind: {
-          path: '$owner',
-          preserveNullAndEmptyArrays: true,
-        },
-      },
+      { $unwind: { path: '$owner', preserveNullAndEmptyArrays: true } },
+  
+      // Lookup reviewer without password
       {
         $lookup: {
           from: 'users',
-          localField: 'reviewer_id',
-          foreignField: '_id',
+          let: { reviewerId: '$reviewer_id' },
+          pipeline: [
+            { $match: { $expr: { $eq: ['$_id', '$$reviewerId'] } } },
+            { $project: { password: 0 } }, // exclude password
+          ],
           as: 'reviewer',
         },
       },
-      {
-        $unwind: {
-          path: '$reviewer',
-          preserveNullAndEmptyArrays: true,
-        },
-      },
+      { $unwind: { path: '$reviewer', preserveNullAndEmptyArrays: true } },
     ];
-
-    // 🔍 Use utility function to build search query
+  
+    // Add search filter if present
     if (searchStr && searchStr.trim() !== '') {
       const searchQuery = buildSearchQuery(searchStr, [
         'owner.first_name',
@@ -135,23 +137,23 @@ export class ReviewService {
         'reviewer.last_name',
         'reviewer.email',
       ]);
-
       pipeline.push({ $match: searchQuery });
     }
-
+  
+    // Pagination + total count
     pipeline.push({
       $facet: {
         data: [{ $skip: (page - 1) * limit }, { $limit: limit }],
         totalCount: [{ $count: 'count' }],
       },
     });
-
+  
     const result = await this.reviewModel.aggregate(pipeline);
-    const listings = result[0]?.data || [];
+    const reviews = result[0]?.data || [];
     const total_items = result[0]?.totalCount[0]?.count || 0;
-
+  
     return {
-      listings,
+      reviews,
       pagination: {
         total_items,
         total_pages: Math.ceil(total_items / limit),
@@ -160,6 +162,7 @@ export class ReviewService {
       },
     };
   }
+  
 
   async updateByFilter(
     filter: FilterQuery<Review>, // Accepts any filter object
