@@ -100,8 +100,7 @@ export class ChatService {
       },
       {
         $set: { read: true, readAt: new Date() },
-      },
-      { new: true },
+      }
     );
   }
 
