@@ -9,8 +9,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Request } from 'express';
-import { JwtAuthGuard } from 'src/auth/jwtAuthGuard';
 import { ChatService } from './chat.service';
+import { JwtAuthGuard } from '../auth/jwtAuthGuard';
 
 @Controller('chat')
 export class ChatController {

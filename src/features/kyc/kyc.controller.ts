@@ -9,11 +9,11 @@ import {
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/auth/jwtAuthGuard';
-import { UserDocument } from 'src/users/schemas/user.schema';
 import { KycService } from './kyc.service';
 import { KYC } from './schemas/kyc.schema';
 import { IDojahIdentityResponse } from './interfaces/kyc.types';
+import { JwtAuthGuard } from '../auth/jwtAuthGuard';
+import { UserDocument } from '../users/schemas/user.schema';
 
 @Controller('kyc')
 export class KYCController {

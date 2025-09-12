@@ -7,10 +7,10 @@ import {
   WebSocketGateway,
 } from '@nestjs/websockets';
 import { Socket } from 'socket.io';
-import { AuthService } from 'src/auth/auth.service';
 import { ChatService } from './chat.service';
 import { ReadMessageDto } from './dto/read-message.dto';
 import { SendMessageDto } from './dto/send-message.dto';
+import { AuthService } from '../auth/auth.service';
 
 @WebSocketGateway({ cors: { origin: '*' } })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {

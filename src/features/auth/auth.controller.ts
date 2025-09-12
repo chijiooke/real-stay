@@ -1,6 +1,6 @@
 import { Controller, Post, Body, Patch } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { User, UserDocument } from 'src/users/schemas/user.schema';
+import { User, UserDocument } from '../users/schemas/user.schema';
 
 @Controller('auth') // This must match your route prefix
 export class AuthController {

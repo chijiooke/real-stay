@@ -7,7 +7,7 @@ import { Schema as MongooseSchema } from 'mongoose';
 
 @Schema({ timestamps: true }) // Auto-add createdAt & updatedAt fields
 export class KYC extends Document {
-  @Prop({type: MongooseSchema.Types.ObjectId, required: true })
+  @Prop({ type: MongooseSchema.Types.ObjectId, required: true })
   user_id: Types.ObjectId;
 
   @Prop({ required: true })
@@ -18,6 +18,9 @@ export class KYC extends Document {
 
   @Prop({ required: true })
   provider: string;
+
+  @Prop({ required: true })
+  selfie_image: string;
 
   @Prop({ type: Object, required: true })
   identity_data: Identity;

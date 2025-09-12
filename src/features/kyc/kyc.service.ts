@@ -1,9 +1,9 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model, Types } from 'mongoose';
-import { UserDocument } from 'src/users/schemas/user.schema';
 import { KYC, KYCDocument } from './schemas/kyc.schema';
 import { getAge } from 'src/utils/helpers';
+import { UserDocument } from '../users/schemas/user.schema';
 
 @Injectable()
 export class KycService {

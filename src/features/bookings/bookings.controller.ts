@@ -9,22 +9,22 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/auth/jwtAuthGuard';
-import { ListingService } from 'src/listing/listing.service';
-import { ReviewService } from './reviews.service';
-import { Review } from './schemas/reviews.schema';
+import { JwtAuthGuard } from '../auth/jwtAuthGuard';
+import { ListingService } from '../listing/listing.service';
+import { BookingService } from './bookings.service';
+import { Booking } from './schemas/bookings.schema';
 
-@Controller('reviews')
+@Controller('bookings')
 export class ReviewsController {
   constructor(
-    private readonly ratingService: ReviewService,
+    private readonly bookingService: BookingService,
     private readonly listingService: ListingService,
   ) {}
 
   @Post('')
   @UseGuards(JwtAuthGuard)
   async create(
-    @Body() payload: Review, // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    @Body() payload: Booking, // eslint-disable-next-line @typescript-eslint/no-explicit-any
     @Request() authData: any,
   ) {
     const listing = await this.listingService.getListing(
@@ -35,20 +35,20 @@ export class ReviewsController {
       throw new NotFoundException('Listing not found');
     }
 
-    payload.reviewer_id = authData.user._id;
+    payload.customer_id = authData.user._id;
     payload.property_owner_id = listing.owner_id;
-    return this.ratingService.createReview(payload);
+    return this.bookingService.createBooking(payload);
   }
 
   @Get('')
   @UseGuards(JwtAuthGuard)
   async get(@Query() filter: Record<string, string>) {
-    return this.ratingService.getReviews(filter);
+    return this.bookingService.getBookings(filter);
   }
 
   @Get('/:id')
   @UseGuards(JwtAuthGuard)
   async getByListingId(@Param('id') reviewId: string) {
-    return this.ratingService.getReview(reviewId);
+    return this.bookingService.getgetBookingByID(reviewId);
   }
 }

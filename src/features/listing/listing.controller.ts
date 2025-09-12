@@ -10,10 +10,10 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/auth/jwtAuthGuard';
-import { UserStatusEnum } from 'src/users/interfaces/user.types';
 import { ListingService } from './listing.service';
 import { Listing } from './schemas/listing.schema';
+import { JwtAuthGuard } from '../auth/jwtAuthGuard';
+import { UserStatusEnum } from '../users/interfaces/user.types';
 
 @Controller('listing')
 export class ListingController {

@@ -1,12 +1,12 @@
 import { Module, forwardRef } from '@nestjs/common';
-import { ListingModule } from 'src/listing/listing.module';
 import { AuthModule } from '../auth/auth.module';
 import { AnalyticsController } from './analytics.controller';
 import { AnalyticsService } from './analytics.service';
-import { UsersModule } from 'src/users/users.module';
-import { User, UserSchema } from 'src/users/schemas/user.schema';
-import { Listing, ListingSchema } from 'src/listing/schemas/listing.schema';
 import { MongooseModule } from '@nestjs/mongoose';
+import { User, UserSchema } from '../users/schemas/user.schema';
+import { Listing, ListingSchema } from '../listing/schemas/listing.schema';
+import { ListingModule } from '../listing/listing.module';
+import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
@@ -23,4 +23,3 @@ import { MongooseModule } from '@nestjs/mongoose';
   exports: [AnalyticsService],
 })
 export class AnalyticsModule {}
-

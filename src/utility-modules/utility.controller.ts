@@ -1,8 +1,9 @@
 // src/upload/upload.controller.ts
 import { Controller, Post, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
-import { JwtAuthGuard } from 'src/auth/jwtAuthGuard';
+// import { JwtAuthGuard } from 'src/auth/jwtAuthGuard';
 import { UtilityService } from './utility.service';
+import { JwtAuthGuard } from 'src/features/auth/jwtAuthGuard';
 
 @Controller('utility') // <- this is your base path
 export class UtilityController {
