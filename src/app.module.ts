@@ -13,6 +13,7 @@ import { HealthModule } from './health/health.module';
 import { AnalyticsModule } from './features/analytics/analytics.module';
 import { KycModule } from './features/kyc/kyc.module';
 import { FirebaseModule } from './features/notifications/firebase.module';
+import { BookingModule } from './features/bookings/reviews.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { FirebaseModule } from './features/notifications/firebase.module';
     AnalyticsModule,
     KycModule,
     FirebaseModule,
+    BookingModule,
   ],
 })
 export class AppModule {}

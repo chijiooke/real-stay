@@ -1,21 +1,19 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from '../auth/auth.module'; // Assuming AuthModule contains AuthService
-import { ReviewsController } from './bookings.controller';
-import { ReviewService } from './bookings.service';
-import { Review, BookingSchema } from './schemas/bookings.schema';
 import { ListingModule } from '../listing/listing.module';
+import { bookingsController } from './bookings.controller';
+import { BookingService } from './bookings.service';
+import { Booking, BookingSchema } from './schemas/bookings.schema';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([
-      { name: Review.name, schema: BookingSchema },
-    ]),
+    MongooseModule.forFeature([{ name: Booking.name, schema: BookingSchema }]),
     AuthModule, // Import the AuthModule to resolve AuthService dependency
-    ListingModule
+    ListingModule,
   ],
-  providers: [ReviewService],
-  controllers: [ReviewsController],
-  exports: [ReviewService],
+  providers: [BookingService],
+  controllers: [bookingsController],
+  exports: [BookingService],
 })
-export class ReviewModule {}
+export class BookingModule {}

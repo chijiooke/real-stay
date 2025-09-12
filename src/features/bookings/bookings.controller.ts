@@ -15,7 +15,7 @@ import { BookingService } from './bookings.service';
 import { Booking } from './schemas/bookings.schema';
 
 @Controller('bookings')
-export class ReviewsController {
+export class bookingsController {
   constructor(
     private readonly bookingService: BookingService,
     private readonly listingService: ListingService,
