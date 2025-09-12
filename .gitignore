@@ -56,3 +56,7 @@ pids
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 .config/firebase-fcm.json
+
+# Firebase FCM service account
+src/config/firebase-fcm.json
+
