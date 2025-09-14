@@ -13,7 +13,6 @@ import { ReviewModule } from './features/reviews/reviews.module';
 import { UsersModule } from './features/users/users.module';
 import { HealthModule } from './health/health.module';
 import { UtilityModule } from './utility-modules/utility.module';
-import { FirebaseModule } from './features/notifications/firebase.module';
 
 
 
@@ -45,7 +44,7 @@ import { FirebaseModule } from './features/notifications/firebase.module';
     HealthModule,
     AnalyticsModule,
     KycModule,
-    FirebaseModule,
+    // FirebaseModule,
     BookingModule,
   ],
 })
