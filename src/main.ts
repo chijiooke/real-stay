@@ -1,36 +1,9 @@
-// import { NestFactory } from '@nestjs/core';
-// import * as express from 'express';
-// import * as admin from 'firebase-admin';
-// import * as functions from 'firebase-functions';
-// import { AppModule } from './app.module';
-
-// // Initialize Firebase Admin SDK
-// admin.initializeApp();
-
-// // Create an Express app
-// const server = express();
-
-// async function bootstrap() {
-//   const app = await NestFactory.create(AppModule);
-
-//   app.enableCors(); // Enable CORS if needed
-//   const port = process.env.PORT || '8080';
-//   await app.listen(port);
-//   console.log(`app listening on ${port}`);
-// }
-
-// // Call bootstrap to initialize the app
-// bootstrap();
-
-// // Export the Firebase function
-// export const api = functions.https.onRequest(server);
-
 
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import * as dotenv from 'dotenv';
 import { ResponseInterceptor } from './interceptors/response-interceptor';
 import { GlobalExceptionFilter } from './filters/http-exception.filter';
+import * as dotenv from 'dotenv';
 import * as path from 'path';
 
 dotenv.config({path: path.resolve(__dirname, '..', '.env')});

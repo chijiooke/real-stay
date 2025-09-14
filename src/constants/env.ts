@@ -3,4 +3,5 @@ export const ENV = {
   MAILGUN_API_KEY: process.env.MAILGUN_API_KEY as string,
   MAILGUN_DOMAIN: process.env.MAILGUN_DOMAIN as string,
   PORT: process.env.PORT ? parseInt(process.env.PORT, 10) : 3000,
+  FCM_AUTH_CDN_URL: process.env.FCM_AUTH_CDN_URL as string,
 };
