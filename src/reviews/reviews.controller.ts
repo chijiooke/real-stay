@@ -9,10 +9,10 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/auth/jwtAuthGuard';
 import { ListingService } from 'src/listing/listing.service';
 import { ReviewService } from './reviews.service';
 import { Review } from './schemas/reviews.schema';
+import { JwtAuthGuard } from 'src/features/auth/jwtAuthGuard';
 
 @Controller('reviews')
 export class ReviewsController {

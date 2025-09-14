@@ -34,16 +34,10 @@
     "@types/passport-jwt": "^4.0.1",
     "bcrypt": "^5.1.1",
     "bcryptjs": "^3.0.2",
-<<<<<<< HEAD
     "class-validator": "^0.14.2",
-    "cloudinary": "^2.6.0",
-    "dotenv": "^16.4.7",
     "firebase-admin": "^13.5.0",
-=======
     "cloudinary": "^2.6.0",
     "dotenv": "^16.4.7",
-    "firebase-admin": "^13.2.0",
->>>>>>> 8a6127a674572de7be3b815b7da3d17905789513
     "firebase-functions": "^6.3.2",
     "formidable": "^3.5.3",
     "fs-extra": "^11.3.0",

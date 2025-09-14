@@ -11,10 +11,10 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/auth/jwtAuthGuard';
 import { UserStatusEnum, UserTypeEnum } from './interfaces/user.types';
 import { User, UserDocument } from './schemas/user.schema';
 import { UsersService } from './users.service';
+import { JwtAuthGuard } from 'src/features/auth/jwtAuthGuard';
 
 @Controller('users')
 export class UsersController {

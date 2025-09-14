@@ -1,13 +1,9 @@
-<<<<<<< HEAD
 import {
   BadRequestException,
   PipeTransform
 } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { BookingStatusEnum } from 'src/features/bookings/interfaces/bookings.interfaces';
-=======
-import { Types } from 'mongoose';
->>>>>>> 8a6127a674572de7be3b815b7da3d17905789513
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export const generateOtp = (length: number = 6): string => {
@@ -79,7 +75,6 @@ export function getAge(dobString) {
   }
 
   return age;
-<<<<<<< HEAD
 }
 
 export class ParseBookingStatusPipe implements PipeTransform {
@@ -91,6 +86,3 @@ export class ParseBookingStatusPipe implements PipeTransform {
     return upper as BookingStatusEnum;
   }
 }
-=======
-}
->>>>>>> 8a6127a674572de7be3b815b7da3d17905789513

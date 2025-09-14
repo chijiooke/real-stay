@@ -8,8 +8,8 @@ import { ChatGateway } from './chat.gateway';
 import { ChatService } from './chat.service';
 import { Conversation, ConversationSchema } from './conversation.schema';
 import { Message, MessageSchema } from './message.schema';
-import { UsersModule } from 'src/users/users.module';
 import { User, UserSchema } from 'src/users/schemas/user.schema';
+import { UsersModule } from 'src/features/users/users.module';
 
 @Module({
   imports: [

@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
-<<<<<<< HEAD
 // import { AuthModule } from './features/auth/auth.module';
 
 import { AnalyticsModule } from './features/analytics/analytics.module';
@@ -14,18 +13,8 @@ import { ReviewModule } from './features/reviews/reviews.module';
 import { UsersModule } from './features/users/users.module';
 import { HealthModule } from './health/health.module';
 import { UtilityModule } from './utility-modules/utility.module';
-=======
 
-import { AuthModule } from './auth/auth.module';
-import { UsersModule } from './users/users.module';
-import { ListingModule } from './listing/listing.module';
-import { ChatModule } from './chat/chat.module';
-import { UtilityModule } from './utility-modules/utility.module';
-import { ReviewModule } from './reviews/reviews.module';
-import { HealthModule } from './health/health.module';
-import { AnalyticsModule } from './analytics/analytics.module';
-import { KycModule } from './kyc/kyc.module';
->>>>>>> 8a6127a674572de7be3b815b7da3d17905789513
+
 
 @Module({
   imports: [
@@ -35,13 +24,9 @@ import { KycModule } from './kyc/kyc.module';
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => {
-<<<<<<< HEAD
         const uri =
           configService.get<string>('MONGO_URI') ||
           'mongodb://localhost:27017/';
-=======
-        const uri = configService.get<string>('MONGO_URI') || 'mongodb://localhost:27017/';
->>>>>>> 8a6127a674572de7be3b815b7da3d17905789513
         const dbName = configService.get<string>('DB_NAME') || 'real-stay';
         return {
           uri: uri + dbName,
@@ -59,11 +44,8 @@ import { KycModule } from './kyc/kyc.module';
     HealthModule,
     AnalyticsModule,
     KycModule,
-<<<<<<< HEAD
     // FirebaseModule,
     BookingModule,
-=======
->>>>>>> 8a6127a674572de7be3b815b7da3d17905789513
   ],
 })
 export class AppModule {}
