@@ -3,17 +3,16 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 // import { AuthModule } from './features/auth/auth.module';
 
-import { AuthModule } from './features/auth/auth.module';
-import { UsersModule } from './features/users/users.module';
-import { ListingModule } from './features/listing/listing.module';
-import { ChatModule } from './features/chat/chat.module';
-import { UtilityModule } from './utility-modules/utility.module';
-import { ReviewModule } from './features/reviews/reviews.module';
-import { HealthModule } from './health/health.module';
 import { AnalyticsModule } from './features/analytics/analytics.module';
-import { KycModule } from './features/kyc/kyc.module';
-import { FirebaseModule } from './features/notifications/firebase.module';
+import { AuthModule } from './features/auth/auth.module';
 import { BookingModule } from './features/bookings/reviews.module';
+import { ChatModule } from './features/chat/chat.module';
+import { KycModule } from './features/kyc/kyc.module';
+import { ListingModule } from './features/listing/listing.module';
+import { ReviewModule } from './features/reviews/reviews.module';
+import { UsersModule } from './features/users/users.module';
+import { HealthModule } from './health/health.module';
+import { UtilityModule } from './utility-modules/utility.module';
 
 @Module({
   imports: [
@@ -43,7 +42,7 @@ import { BookingModule } from './features/bookings/reviews.module';
     HealthModule,
     AnalyticsModule,
     KycModule,
-    FirebaseModule,
+    // FirebaseModule,
     BookingModule,
   ],
 })

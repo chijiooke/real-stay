@@ -1,4 +1,9 @@
+import {
+  BadRequestException,
+  PipeTransform
+} from '@nestjs/common';
 import { Types } from 'mongoose';
+import { BookingStatusEnum } from 'src/features/bookings/interfaces/bookings.interfaces';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export const generateOtp = (length: number = 6): string => {
@@ -70,4 +75,14 @@ export function getAge(dobString) {
   }
 
   return age;
+}
+
+export class ParseBookingStatusPipe implements PipeTransform {
+  transform(value: any) {
+    const upper = value.toUpperCase();
+    if (!(upper in BookingStatusEnum)) {
+      throw new BadRequestException(`Invalid status provided`);
+    }
+    return upper as BookingStatusEnum;
+  }
 }

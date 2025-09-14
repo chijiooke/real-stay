@@ -4,6 +4,7 @@ import { Document, Types } from 'mongoose';
 export type BookingDocument = Booking & Document<Types.ObjectId>;
 
 import { Schema as MongooseSchema } from 'mongoose';
+import { BookingStatusEnum } from '../interfaces/bookings.interfaces';
 
 @Schema({ timestamps: true }) // Automatically adds createdAt & updatedAt
 export class Booking extends Document {
@@ -23,10 +24,10 @@ export class Booking extends Document {
   end_date: string;
 
   @Prop({ required: true })
-  status: string; //pending, accepted, paid, payment
+  status: BookingStatusEnum; //pending, accepted, paid, payment
 
   @Prop()
-  paymentRef?: string;
+  paymentRef: string;
 }
 
 export const BookingSchema = SchemaFactory.createForClass(Booking);

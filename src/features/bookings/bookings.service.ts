@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   InternalServerErrorException,
 } from '@nestjs/common';
@@ -8,6 +9,8 @@ import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model, Types } from 'mongoose';
 import { buildSearchQuery, normalizeObjectIdFields } from 'src/utils/helpers';
 import { BookingDocument, Booking } from './schemas/bookings.schema';
+import { BookingStatusEnum } from './interfaces/bookings.interfaces';
+import { NotFoundError } from 'rxjs';
 
 @Injectable()
 export class BookingService {
@@ -16,9 +19,71 @@ export class BookingService {
     private readonly bookingModel: Model<BookingDocument>, // Inject Listing model
   ) {}
 
+  async requestReservation(payload: Booking): Promise<BookingDocument> {
+    const conflict = await this.bookingModel.findOne({
+      listing_id: payload.listing_id,
+      status: { $in: [BookingStatusEnum.RESERVED, BookingStatusEnum.BOOKED] }, // only block active/valid bookings
+      $or: [
+        {
+          start_date: { $lt: payload.start_date },
+          end_date: { $gt: payload.end_date },
+        },
+      ],
+    });
+
+    if (conflict) {
+      throw new ConflictException(
+        'This listing is already booked for the selected dates.',
+      );
+    }
+
+    payload.status = BookingStatusEnum.PENDING;
+    return await this.createBooking(payload);
+  }
+
+  async reviewReservation(
+    status: BookingStatusEnum,
+    bookingId: string,
+  ): Promise<BookingDocument | null> {
+    const booking = await this.getgetBookingByID(bookingId);
+    if (!booking) {
+      throw new NotFoundError('booking not found, kindly confirm booking id');
+    }
+
+    if (booking.status === BookingStatusEnum.BOOKED) {
+      throw new BadRequestException(
+        "invalid action: can't cancel a booked listing, kindly contact support",
+      );
+    }
+
+    if (status === BookingStatusEnum.BOOKED) {
+      throw new BadRequestException('invalid status provided');
+    }
+
+    booking.status = status;
+    return this.updateByFilter({ _id: booking._id }, booking);
+  }
+
+  async completeBooking(
+    transactionRef: string,
+    bookingId: string,
+  ): Promise<BookingDocument | null> {
+    const booking = await this.getgetBookingByID(bookingId);
+
+    if (!booking) {
+      throw new NotFoundError('booking not found, kindly confirm booking id');
+    }
+
+    booking.paymentRef = transactionRef;
+    booking.status = BookingStatusEnum.BOOKED;
+
+    return this.updateByFilter({ _id: booking._id }, booking);
+  }
+
   async createBooking(payload: Booking): Promise<BookingDocument> {
     try {
-      return await this.bookingModel.create(payload);
+      //check if booking if listing is avaliable on the days
+      return (await this.bookingModel.create(payload)).toObject();
     } catch (error) {
       if (error.code === 11000) {
         const duplicateField = Object.keys(
@@ -71,7 +136,7 @@ export class BookingService {
     page: number = 1,
     limit: number = 10,
   ): Promise<{
-    reviews: BookingDocument[];
+    bookings: BookingDocument[];
     pagination: {
       total_items: number;
       total_pages: number;
@@ -149,11 +214,11 @@ export class BookingService {
     });
 
     const result = await this.bookingModel.aggregate(pipeline);
-    const reviews = result[0]?.data || [];
+    const bookings = result[0]?.data || [];
     const total_items = result[0]?.totalCount[0]?.count || 0;
 
     return {
-      reviews,
+      bookings,
       pagination: {
         total_items,
         total_pages: Math.ceil(total_items / limit),
@@ -169,6 +234,7 @@ export class BookingService {
   ): Promise<BookingDocument | null> {
     return this.bookingModel
       .findOneAndUpdate(filter, payload, { new: true })
+      .lean()
       .exec();
   }
 }

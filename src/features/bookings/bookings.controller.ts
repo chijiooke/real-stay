@@ -4,6 +4,7 @@ import {
   Get,
   NotFoundException,
   Param,
+  Patch,
   Post,
   Query,
   Request,
@@ -13,6 +14,9 @@ import { JwtAuthGuard } from '../auth/jwtAuthGuard';
 import { ListingService } from '../listing/listing.service';
 import { BookingService } from './bookings.service';
 import { Booking } from './schemas/bookings.schema';
+import { BookingStatusEnum } from './interfaces/bookings.interfaces';
+import { ParseBookingStatusPipe } from 'src/utils/helpers';
+import { CompleteBookingDto } from './dto/booking.dto';
 
 @Controller('bookings')
 export class bookingsController {
@@ -37,7 +41,7 @@ export class bookingsController {
 
     payload.customer_id = authData.user._id;
     payload.property_owner_id = listing.owner_id;
-    return this.bookingService.createBooking(payload);
+    return this.bookingService.requestReservation(payload);
   }
 
   @Get('')
@@ -50,5 +54,26 @@ export class bookingsController {
   @UseGuards(JwtAuthGuard)
   async getByListingId(@Param('id') reviewId: string) {
     return this.bookingService.getgetBookingByID(reviewId);
+  }
+
+  @Patch('/:id/:status')
+  @UseGuards(JwtAuthGuard)
+  async reviewReservation(
+    @Param('id') bookingId: string,
+    @Param('status', ParseBookingStatusPipe) status: BookingStatusEnum,
+  ) {
+    return this.bookingService.reviewReservation(
+      status.toUpperCase() as BookingStatusEnum,
+      bookingId,
+    );
+  }
+
+  @Post('/complete')
+  @UseGuards(JwtAuthGuard)
+  async completeBooking(@Body() body: CompleteBookingDto) {
+    return this.bookingService.completeBooking(
+      body.transactionRef, //paystack transaction ref
+      body.bookingId,
+    );
   }
 }
