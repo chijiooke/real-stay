@@ -89,6 +89,15 @@ export class ListingController {
     return this.listingService.getSavedListing(userId, filter);
   }
 
+  @Get('my-listings')
+  @UseGuards(JwtAuthGuard)
+  async myListings(@Request() req, @Query() filter: Record<string, string>) {
+    const userId: string = req.user._id;
+
+    filter['owner_id'] = userId;
+    return this.listingService.getListings(filter);
+  }
+
   @Get('')
   @UseGuards(JwtAuthGuard)
   async get(@Query() filter: Record<string, string>) {

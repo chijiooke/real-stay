@@ -5,7 +5,7 @@ import { FirebaseService } from './firebase.service';
 export class NotificationsController {
   constructor(private readonly firebaseService: FirebaseService) {}
 
-  @Post()
+  @Post('')
   async sendNotification(
     @Body('token') token: string,
     @Body('title') title: string,

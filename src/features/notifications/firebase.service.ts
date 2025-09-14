@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import * as admin from 'firebase-admin';
 
 @Injectable()
@@ -21,11 +21,19 @@ export class FirebaseService {
         data: data || {},
       };
 
+      console.log({ message });
+
       const response = await admin.messaging().send(message);
       this.logger.log(`Notification sent: ${response}`);
       return response;
     } catch (error) {
       this.logger.error('Error sending notification', error);
+
+      if (error.code === 'messaging/registration-token-not-registered') {
+        // remove token from your database
+        throw new BadRequestException('invalid device token');
+      }
+
       throw error;
     }
   }

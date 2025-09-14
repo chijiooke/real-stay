@@ -1,7 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import * as admin from 'firebase-admin';
-import { ENV } from 'src/constants/env';
 import { FirebaseService } from './firebase.service';
+import { NotificationsController } from './notifications.controller';
 
 @Global()
 @Module({
@@ -10,8 +10,8 @@ import { FirebaseService } from './firebase.service';
       provide: 'FIREBASE_ADMIN',
       useFactory: async () => {
         // Fetch the JSON from your CDN
-        console.log({ url: ENV.FCM_AUTH_CDN_URL });
-        const response = await fetch(ENV.FCM_AUTH_CDN_URL);
+        console.log({ url: process.env.FCM_AUTH_CDN_URL });
+        const response = await fetch(process.env.FCM_AUTH_CDN_URL as string);
         if (!response.ok) {
           throw new Error('Failed to fetch Firebase service account JSON');
         }
@@ -24,7 +24,7 @@ import { FirebaseService } from './firebase.service';
     },
     FirebaseService,
   ],
-  controllers: [],
+  controllers: [NotificationsController],
   exports: [FirebaseService],
 })
 export class FirebaseModule {}
