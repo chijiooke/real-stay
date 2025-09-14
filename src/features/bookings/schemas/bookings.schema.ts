@@ -8,23 +8,23 @@ import { BookingStatusEnum } from '../interfaces/bookings.interfaces';
 
 @Schema({ timestamps: true }) // Automatically adds createdAt & updatedAt
 export class Booking extends Document {
-  @Prop({ type: MongooseSchema.Types.ObjectId, required: true, ref: 'User' }) // Reference to User collection
+  @Prop({ type: MongooseSchema.Types.ObjectId, required: true, ref: 'User' })
   customer_id: Types.ObjectId;
 
-  @Prop({ type: MongooseSchema.Types.ObjectId, required: true, ref: 'User' }) // Reference to User collection
+  @Prop({ type: MongooseSchema.Types.ObjectId, required: true, ref: 'User' })
   property_owner_id: Types.ObjectId;
 
-  @Prop({ type: MongooseSchema.Types.ObjectId, required: true, ref: 'Listing' }) // Reference to User collection
+  @Prop({ type: MongooseSchema.Types.ObjectId, required: true, ref: 'Listing' })
   listing_id: Types.ObjectId;
 
-  @Prop({ required: true })
-  start_date: string;
+  @Prop({ type: Date, required: true })
+  start_date: Date;
 
-  @Prop({ required: true })
-  end_date: string;
+  @Prop({ type: Date, required: true })
+  end_date: Date;
 
-  @Prop({ required: true })
-  status: BookingStatusEnum; //pending, accepted, paid, payment
+  @Prop({ type: String, enum: BookingStatusEnum, required: true })
+  status: BookingStatusEnum;
 
   @Prop()
   paymentRef: string;

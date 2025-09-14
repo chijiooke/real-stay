@@ -20,20 +20,21 @@ export class BookingService {
   ) {}
 
   async requestReservation(payload: Booking): Promise<BookingDocument> {
-    const conflict = await this.bookingModel.findOne({
+    const filter = {
       listing_id: payload.listing_id,
-      status: { $in: [BookingStatusEnum.RESERVED, BookingStatusEnum.BOOKED] }, // only block active/valid bookings
-      $or: [
-        {
-          start_date: { $lt: payload.start_date },
-          end_date: { $gt: payload.end_date },
-        },
+      status: { $in: [BookingStatusEnum.RESERVED, BookingStatusEnum.BOOKED] },
+      $and: [
+        { start_date: { $lte: payload.end_date } }, // existing booking starts before requested end
+        { end_date: { $gte: payload.start_date } }, // existing booking ends after requested start
       ],
-    });
+    };
+
+
+    const conflict = await this.bookingModel.findOne(filter);
 
     if (conflict) {
       throw new ConflictException(
-        'This listing is already booked for the selected dates.',
+        'This listing is already booked/reserved for the selected dates, kindly select another date',
       );
     }
 

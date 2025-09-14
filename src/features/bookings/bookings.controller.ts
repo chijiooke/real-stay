@@ -8,6 +8,7 @@ import {
   Post,
   Query,
   Request,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwtAuthGuard';
@@ -52,16 +53,36 @@ export class bookingsController {
 
   @Get('/:id')
   @UseGuards(JwtAuthGuard)
-  async getByListingId(@Param('id') reviewId: string) {
-    return this.bookingService.getgetBookingByID(reviewId);
+  async getByListingId(@Param('id') id: string) {
+    return this.bookingService.getgetBookingByID(id);
   }
 
   @Patch('/:id/:status')
   @UseGuards(JwtAuthGuard)
   async reviewReservation(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    @Request() authData: any,
     @Param('id') bookingId: string,
     @Param('status', ParseBookingStatusPipe) status: BookingStatusEnum,
   ) {
+    //if user is not an admin or host prevent this action
+    const booking = await this.bookingService.getgetBookingByID(bookingId);
+
+    if (!booking) {
+      throw new NotFoundException('booking not found');
+    }
+
+    if (
+      booking.property_owner_id.toHexString() !==
+        authData.user._id.toHexString() &&
+      authData.user.user_type != 'admin' &&
+      status != BookingStatusEnum.CANCELLED
+    ) {
+      throw new UnauthorizedException(
+        'Only the booking owner or an admin can make this action to a booking.',
+      );
+    }
+
     return this.bookingService.reviewReservation(
       status.toUpperCase() as BookingStatusEnum,
       bookingId,
