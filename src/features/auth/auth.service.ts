@@ -9,9 +9,10 @@ import * as bcrypt from 'bcryptjs';
 import { User, UserDocument } from '../users/schemas/user.schema';
 import { UsersService } from '../users/users.service';
 import { RedisService } from 'src/utility-services/redis';
-import { MailService } from 'src/utility-services/mail.service';
 import { generateOtp } from 'src/utils/helpers';
 import { OAuth2Client } from 'google-auth-library';
+import { MailgunService } from '../notifications/mail/mailgun/mailgun.service';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class AuthService {
@@ -21,7 +22,8 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly redisService: RedisService,
-    private readonly mailService: MailService,
+    private readonly mailService: MailgunService,
+    private readonly configService: ConfigService,
   ) {}
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -57,14 +59,69 @@ export class AuthService {
     return this.sanitizeUser(user);
   }
 
-  login(user: UserDocument): {
+  async login(user: UserDocument): Promise<{
     user: Partial<UserDocument>;
     access_token: string;
-  } {
+    refresh_token: string;
+  }> {
+    const payload = { id: user.id, email: user.email };
+
+    const access_token = this.jwtService.sign(payload, {
+      secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
+      expiresIn: '15m',
+    });
+
+    const refresh_token = this.jwtService.sign(payload, {
+      secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+      expiresIn: '7d',
+    });
+
+    // store refresh token in Redis
+    const key = `refresh:${user.id}`;
+    await this.redisService.set(key, refresh_token, 60 * 60 * 24 * 7); // TTL 7 days
+
     return {
-      user: user,
-      access_token: this.jwtService.sign({ id: user.id, email: user.email }),
+      user: { id: user.id, email: user.email },
+      access_token,
+      refresh_token,
     };
+  }
+
+  async refreshTokens(
+    userId: string,
+    refreshToken: string,
+  ): Promise<{ access_token: string; refresh_token: string }> {
+    const key = `refresh:${userId}`;
+    const storedToken = await this.redisService.get(key);
+
+    if (!storedToken || storedToken !== refreshToken) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    const payload = { id: userId };
+
+    const access_token = this.jwtService.sign(payload, {
+      secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
+      expiresIn: '15m',
+    });
+
+    const new_refresh_token = this.jwtService.sign(payload, {
+      secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+      expiresIn: '7d',
+    });
+
+    await this.redisService.set(key, new_refresh_token, 60 * 60 * 24 * 7); //7days TTL
+
+    return {
+      access_token,
+      refresh_token: new_refresh_token,
+    };
+  }
+
+  async logout(userId: string) {
+    const key = `refresh:${userId}`;
+    await this.redisService.del(key);
+    return { message: 'Logged out successfully' };
   }
 
   async googleLogin(
@@ -124,18 +181,19 @@ export class AuthService {
     const key = `${email}-password-reset`;
     const otp = generateOtp(5);
 
+    // Save OTP in Redis with 5 minutes expiry
     await this.redisService.set(key, otp, 300);
+
+    // Send the OTP email
     await this.mailService.sendTemplateEmail({
+      from: 'Real Stay <hello@edgetechino.com>',
       to: email,
-      subject: 'Password Reset',
-      templateName: 'forgot-password',
-      replacements: {
-        otp,
-        url: 'http://localhost:3000/reset-password',
-      },
+      subject: 'Reset your password',
+      templateName: 'forgot-password', // password-reset.hbs in templates folder
+      context: { otp }, // this will be available in the template
     });
 
-    return { message: 'Otp sent to email successfully' };
+    return { message: 'OTP sent to email successfully' };
   }
 
   async changePassword(
@@ -146,11 +204,7 @@ export class AuthService {
     const key = `${email}-password-reset`;
     const redisOtp = await this.redisService.get(key);
 
-    if (
-      process.env.ENVIRONMENT === 'production' &&
-      otp !== '22222' &&
-      redisOtp !== otp
-    ) {
+    if (!redisOtp || otp?.trim() != redisOtp) {
       throw new BadRequestException('Invalid otp provided');
     }
 

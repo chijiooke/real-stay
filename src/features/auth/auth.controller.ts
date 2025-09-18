@@ -15,9 +15,16 @@ export class AuthController {
   async login(
     @Body() { email, password }: { email: string; password: string },
   ) {
-  
     const user = await this.authService.validateUser(email, password);
     return this.authService.login(user as UserDocument);
+  }
+
+  @Post('refresh')
+  async refresh(
+    @Body()
+    { user_id, refresh_token }: { user_id: string; refresh_token: string },
+  ) {
+    return this.authService.refreshTokens(user_id, refresh_token);
   }
 
   @Post('forgot-password')

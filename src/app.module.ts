@@ -9,13 +9,12 @@ import { BookingModule } from './features/bookings/reviews.module';
 import { ChatModule } from './features/chat/chat.module';
 import { KycModule } from './features/kyc/kyc.module';
 import { ListingModule } from './features/listing/listing.module';
+import { FirebaseModule } from './features/notifications/in-app/firebase.module';
+import { MailgunModule } from './features/notifications/mail/mailgun/mailgun.module';
 import { ReviewModule } from './features/reviews/reviews.module';
 import { UsersModule } from './features/users/users.module';
 import { HealthModule } from './health/health.module';
 import { UtilityModule } from './utility-modules/utility.module';
-import { FirebaseModule } from './features/notifications/firebase.module';
-
-
 
 @Module({
   imports: [
@@ -47,6 +46,7 @@ import { FirebaseModule } from './features/notifications/firebase.module';
     KycModule,
     FirebaseModule,
     BookingModule,
+    MailgunModule,
   ],
 })
 export class AppModule {}

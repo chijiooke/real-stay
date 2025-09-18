@@ -1,13 +1,13 @@
 import { Module } from '@nestjs/common';
-import { UsersModule } from '../users/users.module';
-import { AuthService } from './auth.service';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { JwtStrategy } from './jwt.strategy';
-import { AuthController } from './auth.controller';
 import { RedisService } from 'src/utility-services/redis';
-import { MailService } from 'src/utility-services/mail.service';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { MailgunService } from '../notifications/mail/mailgun/mailgun.service';
+import { UsersModule } from '../users/users.module';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
+import { JwtStrategy } from './jwt.strategy';
 
 @Module({
   imports: [
@@ -23,7 +23,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, RedisService, MailService],
+  providers: [AuthService, JwtStrategy, RedisService, MailgunService],
   exports: [AuthService],
 })
 export class AuthModule {}

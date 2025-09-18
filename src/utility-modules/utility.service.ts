@@ -4,12 +4,13 @@ import { ConfigService } from '@nestjs/config';
 import { v2 as cloudinary } from 'cloudinary';
 import { Request } from 'express';
 import * as formidable from 'formidable';
-import { MailService } from 'src/utility-services/mail.service';
+import { MailgunService } from '../features/notifications/mail/mailgun/mailgun.service'; 
+// 👆 Or cleaner with tsconfig paths: import { MailgunService } from '@mailgun/mailgun.service';
 
 @Injectable()
 export class UtilityService {
   constructor(
-    private readonly mailService: MailService,
+    private readonly mailService: MailgunService, // injected from MailgunModule
     private readonly configService: ConfigService,
   ) {
     cloudinary.config({
@@ -46,10 +47,11 @@ export class UtilityService {
 
   async testEmail() {
     await this.mailService.sendTemplateEmail({
-      to: 'silva.chijioke.michael@gmail.com',
-      subject: 'Welcome to Real Stay!',
-      templateName: 'welcome',
-      replacements: { name: 'Edge Tech' },
+      from: 'Real Stay <hello@edgetechino.com>',
+      to: 'chijiooke234@yopmail.com',
+      subject: 'Reset your password',
+      templateName: 'forgot-password',
+      context: { otp: '12345' },
     });
   }
 }
