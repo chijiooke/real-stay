@@ -14,13 +14,13 @@ export class ResponseInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     return next.handle().pipe(
       map((data) => {
-        const { token, refresh_token, message, ...rest } = data || {};
+        const {  message, ...rest } = data || {};
         return {
           data: rest,
           success: true,
           ...(message && {message}),
-          ...(token && { token }),
-          ...(refresh_token && { refresh_token }),
+          // ...(token && { token }),
+          // ...(refresh_token && { refresh_token }),
         };
       }),
     );

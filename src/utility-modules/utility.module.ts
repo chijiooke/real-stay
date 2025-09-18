@@ -1,12 +1,14 @@
-// src/upload/upload.module.ts
+// src/upload/utility.module.ts
 import { Module } from '@nestjs/common';
-import { UtilityController } from './utility.controller';
+import { ConfigModule } from '@nestjs/config';
+import { MailgunModule } from '../features/notifications/mail/mailgun/mailgun.module';
 import { UtilityService } from './utility.service';
-import { MailService } from 'src/utility-services/mail.service';
+import { UtilityController } from './utility.controller';
 
 @Module({
-  controllers: [UtilityController],
-  providers: [UtilityService, MailService],
-  exports: [UtilityService, MailService],
+  imports: [ConfigModule, MailgunModule],
+  providers: [UtilityService],
+  exports: [UtilityService],
+  controllers:[UtilityController]
 })
 export class UtilityModule {}
