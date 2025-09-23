@@ -98,7 +98,13 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
-    const payload = { id: userId };
+    const user = (await this.usersService.getUser(userId)).user;
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const payload = { id: user.id, email: user.email };
 
     const access_token = this.jwtService.sign(payload, {
       secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
