@@ -7,64 +7,70 @@ import {
   Query,
   Request,
   UnauthorizedException,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { KycService } from './kyc.service';
 import { KYC } from './schemas/kyc.schema';
 import { IDojahIdentityResponse } from './interfaces/kyc.types';
 import { JwtAuthGuard } from '../auth/jwtAuthGuard';
 import { UserDocument } from '../users/schemas/user.schema';
+import { DojahService } from './kyc-providers/dojah';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('kyc')
 export class KYCController {
-  constructor(private readonly kycService: KycService) {}
+  constructor(
+    private readonly kycService: KycService,
+    private readonly dojahService: DojahService,
+  ) {}
 
   @Post('verify')
   @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('selfie_image'))
   async verify(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    @Request() authData: any,
-    @Body() payload: KYC,
+    @Request() req: { user: UserDocument },
+    @Body() payload: VerifyKycDto,
+    @UploadedFile() file: Express.Multer.File,
   ) {
-    const authUser: UserDocument = authData.user;
-    payload.user_id = authUser._id;
+    const authUser = req.user;
 
-    //check if kyc already exixts with the same ID number (nin, bvn)
+    // Convert image buffer to base64
+    if (!file) {
+      throw new BadRequestException('Selfie image is required');
+    }
+    const selfieBase64 = file.buffer.toString('base64');
+
+    // Ensure user doesn’t duplicate KYC
     const exists = await this.kycService.existsByIDNumber(
       payload.id_number,
       payload.id_type?.toLowerCase(),
     );
-
-    //&& process.env.ENVIRONMENT != 'development'
-    if (exists ) {
-      throw new BadRequestException('user with ID number already exists');
+    if (exists) {
+      throw new BadRequestException('User with ID number already exists');
     }
 
-    //get identity data from Dojah
-    const dojahResponse = await fetch(
-      `${process.env.DOJAH_BASE_URL}/api/v1/kyc/${payload.id_type}?nin=${payload.id_number}`,
+    // Call Dojah API
+    const response = await this.dojahService.verifyNIN({
+      nin: payload.id_number,
+      selfieImage: selfieBase64,
+      firstName: authUser.first_name,
+      lastName: authUser.last_name,
+    });
+
+    // Save KYC record
+    await this.kycService.createKYC(
       {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          AppId: process.env.DOJAH_APP_ID || '',
-          Authorization: process.env.DOJAH_PUB_KEY || '',
-        },
+        ...payload,
+        user_id: authUser._id,
+        provider: 'dojah',
+        identity_data: response.entity,
       },
+      authUser,
     );
 
-    const response: IDojahIdentityResponse = await dojahResponse.json();
-
-    //check if name matches
-
-    // payload.identity_data = data;
-    payload.provider = 'dojah';
-    payload.identity_data = response.entity;
-
-    //create KYC
-    await this.kycService.createKYC(payload, authUser);
-
-    return { message: 'kyc verification succesful' };
+    return { message: 'KYC verification successful' };
   }
 
   @Get('/admin')
