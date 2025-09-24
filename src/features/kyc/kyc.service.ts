@@ -11,7 +11,7 @@ export class KycService {
     @InjectModel(KYC.name) private readonly kycmodel: Model<KYCDocument>,
   ) {}
 
-  async createKYC(payload: KYC, user: UserDocument): Promise<KYCDocument> {
+  async createKYC(payload: KYCDocument, user: UserDocument): Promise<KYCDocument> {
 
     //validate name
     if (

@@ -7,8 +7,8 @@ import {
 interface VerifyNINPayload {
   nin: string;
   selfieImage: string;
-  firstName: string;
-  lastName: string;
+  firstName?: string;
+  lastName?: string;
 }
 
 @Injectable()

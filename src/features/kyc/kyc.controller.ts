@@ -11,13 +11,12 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { KycService } from './kyc.service';
-import { KYC } from './schemas/kyc.schema';
-import { IDojahIdentityResponse } from './interfaces/kyc.types';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwtAuthGuard';
 import { UserDocument } from '../users/schemas/user.schema';
+import { VerifyKycDto } from './dto/kyc.dto';
 import { DojahService } from './kyc-providers/dojah';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { KycService } from './kyc.service';
 
 @Controller('kyc')
 export class KYCController {
@@ -54,9 +53,7 @@ export class KYCController {
     // Call Dojah API
     const response = await this.dojahService.verifyNIN({
       nin: payload.id_number,
-      selfieImage: selfieBase64,
-      firstName: authUser.first_name,
-      lastName: authUser.last_name,
+      selfieImage: selfieBase64
     });
 
     // Save KYC record
@@ -66,6 +63,7 @@ export class KYCController {
         user_id: authUser._id,
         provider: 'dojah',
         identity_data: response.entity,
+        selfie_image: 'data:image/jpeg;base64,' + selfieBase64,
       },
       authUser,
     );
