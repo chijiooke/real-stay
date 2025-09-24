@@ -5,7 +5,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 
 import { AnalyticsModule } from './features/analytics/analytics.module';
 import { AuthModule } from './features/auth/auth.module';
-import { BookingModule } from './features/bookings/reviews.module';
+import { BookingModule } from './features/bookings/bookings.module';
 import { ChatModule } from './features/chat/chat.module';
 import { KycModule } from './features/kyc/kyc.module';
 import { ListingModule } from './features/listing/listing.module';
