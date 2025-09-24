@@ -26,7 +26,7 @@ export class ListingController {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     @Request() authData: any,
   ) {
-    if (authData.user.user_type !== 'guest') {
+    if ((authData.user.user_type as string).toLowerCase() == 'guest') {
       throw new BadRequestException('this is not allowed for your user type');
     }
 
