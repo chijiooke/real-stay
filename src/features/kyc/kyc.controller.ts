@@ -60,6 +60,12 @@ export class KYCController {
       selfieImage: selfieBase64,
     });
 
+    if (response?.entity?.selfie_verification?.confidence_value < 0.7) { // threshold of 70%
+      throw new BadRequestException(
+        'Selfie verification failed. Please ensure the selfie image is clear and matches the ID provided.',
+      );
+    }
+
     // Save KYC record
     const data = await this.kycService.createKYC(
       {
