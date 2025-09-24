@@ -17,6 +17,8 @@ import { UserDocument } from '../users/schemas/user.schema';
 import { VerifyKycDto } from './dto/kyc.dto';
 import { DojahService } from './kyc-providers/dojah';
 import { KycService } from './kyc.service';
+import { KYC } from './schemas/kyc.schema';
+import { DojahKYCResponse } from './interfaces/kyc.types';
 
 @Controller('kyc')
 export class KYCController {
@@ -36,6 +38,7 @@ export class KYCController {
     const authUser = req.user;
 
     // Convert image buffer to base64
+    const isDevEnv = process.env.NODE_ENV !== 'production';
     if (!file) {
       throw new BadRequestException('Selfie image is required');
     }
@@ -46,29 +49,30 @@ export class KYCController {
       payload.id_number,
       payload.id_type?.toLowerCase(),
     );
-    if (exists) {
+
+    if (exists && !isDevEnv) {
       throw new BadRequestException('User with ID number already exists');
     }
 
     // Call Dojah API
-    const response = await this.dojahService.verifyNIN({
+    const response: DojahKYCResponse = await this.dojahService.verifyNIN({
       nin: payload.id_number,
-      selfieImage: selfieBase64
+      selfieImage: selfieBase64,
     });
 
     // Save KYC record
-    await this.kycService.createKYC(
+    const data = await this.kycService.createKYC(
       {
         ...payload,
         user_id: authUser._id,
         provider: 'dojah',
         identity_data: response.entity,
         selfie_image: 'data:image/jpeg;base64,' + selfieBase64,
-      },
+      } as KYC,
       authUser,
     );
 
-    return { message: 'KYC verification successful' };
+    return { message: 'KYC verification successful', data };
   }
 
   @Get('/admin')

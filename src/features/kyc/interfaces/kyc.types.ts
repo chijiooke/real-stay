@@ -4,11 +4,19 @@ export interface IDojahIdentityResponse {
 
 export interface Identity {
   first_name: string;
-  middle_name: string;
   last_name: string;
-  date_of_birth: string; // ISO date string (YYYY-MM-DD)
+  middle_name?: string; // optional if it may not always be provided
+  gender: 'M' | 'F' | string; // restrictable if only M/F are valid
+  image: string; // base64 or image path
   phone_number: string;
-  photo: string; // base64 string
-  gender: 'M' | 'F';
-  customer: string; // UUID
+  date_of_birth: string; // ISO date format
+  nin: string;
+  selfie_verification: {
+    confidence_value: number;
+    match: boolean;
+  };
+}
+
+export interface DojahKYCResponse {
+  entity: Identity;
 }

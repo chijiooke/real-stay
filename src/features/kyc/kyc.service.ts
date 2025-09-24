@@ -11,16 +11,20 @@ export class KycService {
     @InjectModel(KYC.name) private readonly kycmodel: Model<KYCDocument>,
   ) {}
 
-  async createKYC(payload: KYCDocument, user: UserDocument): Promise<KYCDocument> {
-
-    //validate name
-    if (
-      payload?.identity_data.first_name?.toLowerCase() !== user?.first_name?.toLowerCase() ||
-      payload?.identity_data?.last_name?.toLowerCase() !== user?.last_name?.toLowerCase()
-    ) {
-      throw new BadRequestException(
-        `names do not match with names on your ${payload.id_type.replaceAll('_', ' ')} record`,
-      );
+  async createKYC(payload: KYC, user: UserDocument): Promise<KYCDocument> {
+    //validate name [production only]
+    const isDevEnv = process.env.NODE_ENV !== 'production';
+    if (!isDevEnv) {
+      if (
+        payload?.identity_data.first_name?.toLowerCase() !==
+          user?.first_name?.toLowerCase() ||
+        payload?.identity_data?.last_name?.toLowerCase() !==
+          user?.last_name?.toLowerCase()
+      ) {
+        throw new BadRequestException(
+          `names do not match with names on your ${payload.id_type.replaceAll('_', ' ')} record`,
+        );
+      }
     }
 
     //validate age
