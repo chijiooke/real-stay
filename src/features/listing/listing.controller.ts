@@ -26,7 +26,10 @@ export class ListingController {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     @Request() authData: any,
   ) {
-    console.log({ payload });
+    if (authData.user.user_type !== 'guest') {
+      throw new BadRequestException('this is not allowed for your user type');
+    }
+
     payload.owner_id = authData.user._id;
     payload.location = {
       type: 'Point',
