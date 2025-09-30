@@ -8,13 +8,52 @@ import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model, Types } from 'mongoose';
 import { buildSearchQuery, normalizeObjectIdFields } from 'src/utils/helpers';
 import { Transaction, TransactionDocument } from './schemas/transaction.schema';
+import { PaystackService } from './payment-providers/paystack';
+import {
+  PaystackVerificationData,
+  PaystackVerificationResponse,
+  TransactionStatusEnum,
+} from './interfaces/transactions.interfaces';
 
 @Injectable()
 export class TransactionsService {
   constructor(
     @InjectModel(Transaction.name)
     private readonly transactionModel: Model<TransactionDocument>, // Inject Listing model
+    private readonly paystackservice: PaystackService,
   ) {}
+
+  async validatePayment(
+    reference: string,
+    customer_id?: string,
+  ): Promise<TransactionDocument> {
+    const res: PaystackVerificationResponse =
+      await this.paystackservice.verifyTransaction(reference);
+
+    if (!res.status) {
+      throw new BadRequestException('payment not successful');
+    }
+
+    let cusObj: Types.ObjectId;
+    if (customer_id) {
+      if (!Types.ObjectId.isValid(customer_id)) {
+        throw new BadRequestException('invalid customer id');
+      }
+
+      
+      cusObj = customer_id;
+    }
+
+    const trxn = {
+      amount: res.data.amount, // Paystack returns amount in kobo
+      currency: res.data.currency,
+      status: res.data.status as TransactionStatusEnum,
+      reference,
+      customer_id: cusObj,
+    };
+
+    return this.createTransaction(trxn);
+  }
 
   async createTransaction(payload: Transaction): Promise<TransactionDocument> {
     try {

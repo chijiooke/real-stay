@@ -14,11 +14,17 @@ export class Transaction extends Document {
   @Prop({ type: String, enum: TransactionStatusEnum, required: true })
   status: TransactionStatusEnum;
 
+  @Prop({ type: Number, required: true })
+  amount: number;
+
   @Prop()
   reference: string;
 
   @Prop()
   provider: string;
+
+  @Prop()
+  currency: string;
 }
 
 export const TransactionSchema = SchemaFactory.createForClass(Transaction);
