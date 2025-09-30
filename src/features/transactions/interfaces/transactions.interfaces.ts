@@ -1,3 +1,5 @@
+import { Types } from "mongoose";
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export enum TransactionStatusEnum {
   ABANDONED = 'abandoned',
@@ -86,4 +88,14 @@ export interface PaystackVerificationData {
   transaction_date: string;
   plan_object: Record<string, any>;
   subaccount: Record<string, any>;
+}
+
+export interface TransactionAttrs {
+  customer_id?: Types.ObjectId;
+  booking_id?: Types.ObjectId;
+  status: TransactionStatusEnum;
+  amount: number;
+  reference: string;
+  provider: string;
+  currency: string;
 }

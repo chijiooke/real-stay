@@ -6,15 +6,18 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model, Types } from 'mongoose';
+import { PAYMENT_PROVIDER } from 'src/constants/constants';
 import { buildSearchQuery, normalizeObjectIdFields } from 'src/utils/helpers';
-import { Transaction, TransactionDocument } from './schemas/transaction.schema';
-import { PaystackService } from './payment-providers/paystack';
 import {
-  PaystackVerificationData,
   PaystackVerificationResponse,
+  TransactionAttrs,
   TransactionStatusEnum,
 } from './interfaces/transactions.interfaces';
+import { PaystackService } from './payment-providers/paystack';
+import { Transaction, TransactionDocument } from './schemas/transaction.schema';
+import { PaystackInitPaymentResponse } from './interfaces/paystack.interface';
 
+//TO DO: re-write using strategy pattern
 @Injectable()
 export class TransactionsService {
   constructor(
@@ -23,42 +26,44 @@ export class TransactionsService {
     private readonly paystackservice: PaystackService,
   ) {}
 
+  async initPayment(
+    amount: number,
+    email: string,
+  ): Promise<PaystackInitPaymentResponse> {
+    return await this.paystackservice.initPayment(email, amount);
+  }
+
   async validatePayment(
     reference: string,
-    customer_id?: string,
+    customer_id?: Types.ObjectId,
+    booking_id?: Types.ObjectId,
   ): Promise<TransactionDocument> {
     const res: PaystackVerificationResponse =
       await this.paystackservice.verifyTransaction(reference);
 
     if (!res.status) {
-      throw new BadRequestException('payment not successful');
+      throw new BadRequestException('Payment not successful');
     }
 
-    let cusObj: Types.ObjectId;
-    if (customer_id) {
-      if (!Types.ObjectId.isValid(customer_id)) {
-        throw new BadRequestException('invalid customer id');
-      }
-
-      
-      cusObj = customer_id;
-    }
-
-    const trxn = {
+    const trxn: TransactionAttrs = {
       amount: res.data.amount, // Paystack returns amount in kobo
       currency: res.data.currency,
       status: res.data.status as TransactionStatusEnum,
       reference,
-      customer_id: cusObj,
+      provider: PAYMENT_PROVIDER.PAYSTACK,
+      customer_id: customer_id,
+      booking_id: booking_id,
     };
 
     return this.createTransaction(trxn);
   }
 
-  async createTransaction(payload: Transaction): Promise<TransactionDocument> {
+  async createTransaction(
+    payload: TransactionAttrs,
+  ): Promise<TransactionDocument> {
     try {
-      //check if booking if listing is avaliable on the days
-      return (await this.transactionModel.create(payload)).toObject();
+      const doc = await this.transactionModel.create(payload);
+      return doc.toObject();
     } catch (error) {
       if (error.code === 11000) {
         const duplicateField = Object.keys(
@@ -68,11 +73,14 @@ export class TransactionsService {
           `The ${duplicateField} is already in use.`,
         );
       }
+
       throw new InternalServerErrorException(
-        error.message || 'Failed to create booking',
+        error.message || 'Failed to create transaction',
       );
     }
   }
+
+  //To Do: write pulling logic, handle reversals
 
   //To Do: hide password from response
   async getTransactionByID(

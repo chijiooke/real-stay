@@ -11,12 +11,14 @@ import { buildSearchQuery, normalizeObjectIdFields } from 'src/utils/helpers';
 import { BookingDocument, Booking } from './schemas/bookings.schema';
 import { BookingStatusEnum } from './interfaces/bookings.interfaces';
 import { NotFoundError } from 'rxjs';
+import { TransactionsService } from '../transactions/transactions.service';
 
 @Injectable()
 export class BookingService {
   constructor(
     @InjectModel(Booking.name)
-    private readonly bookingModel: Model<BookingDocument>, // Inject Listing model
+    private readonly bookingModel: Model<BookingDocument>,
+    private readonly transactionService: TransactionsService,
   ) {}
 
   async requestReservation(payload: Booking): Promise<BookingDocument> {
@@ -28,7 +30,6 @@ export class BookingService {
         { end_date: { $gte: payload.start_date } }, // existing booking ends after requested start
       ],
     };
-
 
     const conflict = await this.bookingModel.findOne(filter);
 
@@ -73,6 +74,13 @@ export class BookingService {
 
     if (!booking) {
       throw new NotFoundError('booking not found, kindly confirm booking id');
+    }
+
+    //verify payment status with paymentRef
+    const transaction = await this.transactionService.validatePayment(transactionRef, booking?.customer_id, booking?._id);
+
+    if (!transaction) {
+      throw new NotFoundError('transaction not found, kindly confirm transaction reference');
     }
 
     booking.paymentRef = transactionRef;

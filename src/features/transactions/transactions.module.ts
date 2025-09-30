@@ -2,9 +2,10 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from '../auth/auth.module'; // Assuming AuthModule contains AuthService
 import { ListingModule } from '../listing/listing.module';
-import { TransactionSchema, Transaction } from './schemas/transaction.schema';
+import { Transaction, TransactionSchema } from './schemas/transaction.schema';
 import { TransactionsController } from './transactions.controller';
 import { TransactionsService } from './transactions.service';
+import { PaystackService } from './payment-providers/paystack';
 
 @Module({
   imports: [
@@ -14,8 +15,8 @@ import { TransactionsService } from './transactions.service';
     AuthModule,
     ListingModule,
   ],
-  providers: [TransactionsService],
+  providers: [TransactionsService, PaystackService],
   controllers: [TransactionsController],
   exports: [TransactionsService],
 })
-export class BookingModule {}
+export class TransactionModule {}

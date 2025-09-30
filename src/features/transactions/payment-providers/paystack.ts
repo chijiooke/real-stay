@@ -3,6 +3,7 @@ import {
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
+import { PaystackInitPaymentResponse } from '../interfaces/paystack.interface';
 
 @Injectable()
 export class PaystackService {
@@ -15,7 +16,7 @@ export class PaystackService {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: process.env.PAYSTACK_SECRET_KEY || '',
+            Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
           },
         },
       );
@@ -32,4 +33,41 @@ export class PaystackService {
       );
     }
   }
+
+  async initPayment(email: string, amount: number): Promise<PaystackInitPaymentResponse> {
+
+    console.log('Initializing Paystack payment for:', process.env.PAYSTACK_SECRET_KEY)
+    try {
+      const response = await fetch(
+        `${process.env.PAYSTACK_BASE_URL}/transaction/initialize`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+          },
+          body: JSON.stringify({
+            email,
+            amount, // Paystack expects amount in kobo
+          }),
+        },
+      );
+  
+      const data = await response.json();
+  
+      if (!response.ok) {
+        throw new Error(
+          `Paystack API error: ${data?.message || response.statusText}`,
+        );
+      }
+  
+      return data; // contains { status, message, data: { authorization_url, access_code, reference } }
+    } catch (err) {
+      Logger.error('Paystack init payment error:', err);
+      throw new InternalServerErrorException(
+        'Failed to initialize payment with Paystack',
+      );
+    }
+  }
+  
 }
