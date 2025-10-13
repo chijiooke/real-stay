@@ -7,7 +7,11 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model, Types } from 'mongoose';
 import { PAYMENT_PROVIDER } from 'src/constants/constants';
-import { buildSearchQuery, normalizeObjectIdFields } from 'src/utils/helpers';
+import {
+  buildSearchQuery,
+  getPagingParameters,
+  normalizeObjectIdFields,
+} from 'src/utils/helpers';
 import {
   PaystackVerificationResponse,
   TransactionAttrs,
@@ -116,11 +120,7 @@ export class TransactionsService {
     return result.length > 0 ? result[0] : null;
   }
 
-  async getTransactions(
-    filter: FilterQuery<Transaction>,
-    page: number = 1,
-    limit: number = 10,
-  ): Promise<{
+  async getTransactions(filter: FilterQuery<Transaction>): Promise<{
     transactions: TransactionDocument[];
     pagination: {
       total_items: number;
@@ -136,6 +136,8 @@ export class TransactionsService {
       delete filter['search']; // Remove search from filter to avoid conflicts
     }
 
+    const { skip, limit, currentPage } = getPagingParameters(filter);
+
     // normalize ObjectId fields
     filter = normalizeObjectIdFields(filter, [
       'customer_id',
@@ -143,6 +145,7 @@ export class TransactionsService {
       'listing_id',
     ]);
 
+    console.log({ filter });
     const baseMatchStage: any = { ...filter };
 
     const pipeline: any[] = [
@@ -176,7 +179,7 @@ export class TransactionsService {
     // Pagination + total count
     pipeline.push({
       $facet: {
-        data: [{ $skip: (page - 1) * limit }, { $limit: limit }],
+        data: [{ $skip: skip }, { $limit: limit }],
         totalCount: [{ $count: 'count' }],
       },
     });
@@ -190,7 +193,7 @@ export class TransactionsService {
       pagination: {
         total_items,
         total_pages: Math.ceil(total_items / limit),
-        current_page: page,
+        current_page: currentPage,
         limit,
       },
     };

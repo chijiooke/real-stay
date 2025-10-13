@@ -6,7 +6,11 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model, Types } from 'mongoose';
-import { buildSearchQuery, normalizeObjectIdFields } from 'src/utils/helpers';
+import {
+  buildSearchQuery,
+  getPagingParameters,
+  normalizeObjectIdFields,
+} from 'src/utils/helpers';
 import { Review, ReviewDocument } from './schemas/reviews.schema';
 
 @Injectable()
@@ -66,11 +70,7 @@ export class ReviewService {
     return result.length > 0 ? result[0] : null;
   }
 
-  async getReviews(
-    filter: FilterQuery<Review>,
-    page: number = 1,
-    limit: number = 10,
-  ): Promise<{
+  async getReviews(filter: FilterQuery<Review>): Promise<{
     reviews: ReviewDocument[];
     pagination: {
       total_items: number;
@@ -85,19 +85,20 @@ export class ReviewService {
       searchStr = filter['search'];
       delete filter['search']; // Remove search from filter to avoid conflicts
     }
-  
+
     // normalize ObjectId fields
     filter = normalizeObjectIdFields(filter, [
       'reviewer_id',
       'property_owner_id',
       'listing_id',
     ]);
-  
+
+    const { skip, limit, currentPage } = getPagingParameters(filter);
     const baseMatchStage: any = { ...filter };
-  
+
     const pipeline: any[] = [
       { $match: baseMatchStage },
-  
+
       // Lookup owner without password
       {
         $lookup: {
@@ -111,7 +112,7 @@ export class ReviewService {
         },
       },
       { $unwind: { path: '$owner', preserveNullAndEmptyArrays: true } },
-  
+
       // Lookup reviewer without password
       {
         $lookup: {
@@ -126,7 +127,7 @@ export class ReviewService {
       },
       { $unwind: { path: '$reviewer', preserveNullAndEmptyArrays: true } },
     ];
-  
+
     // Add search filter if present
     if (searchStr && searchStr.trim() !== '') {
       const searchQuery = buildSearchQuery(searchStr, [
@@ -139,30 +140,29 @@ export class ReviewService {
       ]);
       pipeline.push({ $match: searchQuery });
     }
-  
+
     // Pagination + total count
     pipeline.push({
       $facet: {
-        data: [{ $skip: (page - 1) * limit }, { $limit: limit }],
+        data: [{ $skip: skip }, { $limit: limit }],
         totalCount: [{ $count: 'count' }],
       },
     });
-  
+
     const result = await this.reviewModel.aggregate(pipeline);
     const reviews = result[0]?.data || [];
     const total_items = result[0]?.totalCount[0]?.count || 0;
-  
+
     return {
       reviews,
       pagination: {
         total_items,
         total_pages: Math.ceil(total_items / limit),
-        current_page: page,
+        current_page: currentPage,
         limit,
       },
     };
   }
-  
 
   async updateByFilter(
     filter: FilterQuery<Review>, // Accepts any filter object

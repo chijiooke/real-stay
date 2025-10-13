@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model, Types } from 'mongoose';
-import { buildSearchQuery, normalizeObjectIdFields } from 'src/utils/helpers';
+import { buildSearchQuery, getPagingParameters, normalizeObjectIdFields } from 'src/utils/helpers';
 import { BookingDocument, Booking } from './schemas/bookings.schema';
 import { BookingStatusEnum } from './interfaces/bookings.interfaces';
 import { NotFoundError } from 'rxjs';
@@ -142,8 +142,6 @@ export class BookingService {
 
   async getBookings(
     filter: FilterQuery<Booking>,
-    page: number = 1,
-    limit: number = 10,
   ): Promise<{
     bookings: BookingDocument[];
     pagination: {
@@ -161,6 +159,7 @@ export class BookingService {
     }
 
     // normalize ObjectId fields
+    const { skip, limit, currentPage } = getPagingParameters(filter);
     filter = normalizeObjectIdFields(filter, [
       'customer_id',
       'property_owner_id',
@@ -217,7 +216,7 @@ export class BookingService {
     // Pagination + total count
     pipeline.push({
       $facet: {
-        data: [{ $skip: (page - 1) * limit }, { $limit: limit }],
+        data: [{ $skip: skip }, { $limit: limit }],
         totalCount: [{ $count: 'count' }],
       },
     });
@@ -231,7 +230,7 @@ export class BookingService {
       pagination: {
         total_items,
         total_pages: Math.ceil(total_items / limit),
-        current_page: page,
+        current_page: currentPage,
         limit,
       },
     };
