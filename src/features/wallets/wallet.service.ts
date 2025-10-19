@@ -385,68 +385,69 @@ export class WalletService implements OnModuleInit {
   }
 
   /**
- * Get company wallet
- * @param options - Optional session for transactions
- * @returns Company wallet document
- */
-async getCompanyWallet(
-  options?: { session?: ClientSession }
-): Promise<WalletDocument | null> {
-  const query = this.walletModel.findOne({ 
-    is_company_wallet: true 
-  });
-  
-  if (options?.session) {
-    query.session(options.session);
-  }
-  
-  return query.exec();
-}
+   * Get company wallet
+   * @param options - Optional session for transactions
+   * @returns Company wallet document
+   */
+  async getCompanyWallet(options?: {
+    session?: ClientSession;
+  }): Promise<WalletDocument | null> {
+    const query = this.walletModel.findOne({
+      is_company_wallet: true,
+    });
 
-/**
- * Get wallet by customer ID with user details
- * @param customerId - Customer's ID as string
- * @param options - Optional session for transactions
- * @returns Wallet document with populated customer details
- */
-async getWalletByCustomerID(
-  customerId: string,
-  options?: { session?: ClientSession }
-): Promise<WalletDocument | null> {
-  if (!Types.ObjectId.isValid(customerId)) {
-    throw new BadRequestException('Invalid customer ID');
+    if (options?.session) {
+      query.session(options.session);
+    }
+
+    return query.exec();
   }
 
-  const pipeline = [
-    { 
-      $match: { 
-        customer_id: new Types.ObjectId(customerId),
-      } 
-    },
-    {
-      $lookup: {
-        from: 'users',
-        let: { customerId: '$customer_id' },
-        pipeline: [
-          { $match: { $expr: { $eq: ['$_id', '$$customerId'] } } },
-          { $project: { password: 0 } }, // Hide password from response
-        ],
-        as: 'customer',
+  /**
+   * Get wallet by customer ID with user details
+   * @param customerId - Customer's ID as string
+   * @param options - Optional session for transactions
+   * @returns Wallet document with populated customer details
+   */
+  async getWalletByCustomerID(
+    customerId: string,
+    options?: { session?: ClientSession },
+  ): Promise<WalletDocument | null> {
+    console.log({ customerId });
+    if (!Types.ObjectId.isValid(customerId)) {
+      throw new BadRequestException('Invalid customer ID');
+    }
+
+    const pipeline = [
+      {
+        $match: {
+          customer_id: new Types.ObjectId(customerId),
+        },
       },
-    },
-    { $unwind: { path: '$customer', preserveNullAndEmptyArrays: true } },
-  ];
+      {
+        $lookup: {
+          from: 'users',
+          let: { customerId: '$customer_id' },
+          pipeline: [
+            { $match: { $expr: { $eq: ['$_id', '$$customerId'] } } },
+            { $project: { password: 0 } }, // Hide password from response
+          ],
+          as: 'customer',
+        },
+      },
+      { $unwind: { path: '$customer', preserveNullAndEmptyArrays: true } },
+    ];
 
-  const aggregation = this.walletModel.aggregate(pipeline);
-  
-  if (options?.session) {
-    aggregation.session(options.session);
+    const aggregation = this.walletModel.aggregate(pipeline);
+
+    if (options?.session) {
+      aggregation.session(options.session);
+    }
+
+    const [wallet] = await aggregation.exec();
+
+    return wallet || null;
   }
-
-  const [wallet] = await aggregation.exec();
-  
-  return wallet || null;
-}
 
   /**
    * Debit a customer wallet by customer ID
