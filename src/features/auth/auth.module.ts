@@ -8,11 +8,14 @@ import { UsersModule } from '../users/users.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
+import { WalletService } from '../wallets/wallet.service';
+import { WalletModule } from '../wallets/wallet.module';
 
 @Module({
   imports: [
     UsersModule,
     PassportModule,
+    WalletModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -23,7 +26,7 @@ import { JwtStrategy } from './jwt.strategy';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, RedisService, MailgunService],
+  providers: [AuthService, JwtStrategy, RedisService, MailgunService, WalletService],
   exports: [AuthService],
 })
 export class AuthModule {}

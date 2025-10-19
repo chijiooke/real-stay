@@ -1,18 +1,18 @@
 import {
   BadRequestException,
-  ConflictException,
   Injectable,
-  UnauthorizedException,
+  UnauthorizedException
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
-import { User, UserDocument } from '../users/schemas/user.schema';
-import { UsersService } from '../users/users.service';
+import { OAuth2Client } from 'google-auth-library';
 import { RedisService } from 'src/utility-services/redis';
 import { generateOtp } from 'src/utils/helpers';
-import { OAuth2Client } from 'google-auth-library';
 import { MailgunService } from '../notifications/mail/mailgun/mailgun.service';
-import { ConfigService } from '@nestjs/config';
+import { User, UserDocument } from '../users/schemas/user.schema';
+import { UsersService } from '../users/users.service';
+import { WalletService } from '../wallets/wallet.service';
 
 @Injectable()
 export class AuthService {
@@ -20,6 +20,7 @@ export class AuthService {
 
   constructor(
     private readonly usersService: UsersService,
+    private readonly walletService: WalletService,
     private readonly jwtService: JwtService,
     private readonly redisService: RedisService,
     private readonly mailService: MailgunService,
@@ -40,10 +41,23 @@ export class AuthService {
   }
 
   async signup(payload: User): Promise<Partial<UserDocument>> {
+    // 1. Check if user already exists by email
     const existingUser = await this.usersService.findByEmail(payload.email);
-    if (existingUser) throw new ConflictException('User already exists');
 
+    // Idempotent: return existing user (instead of error) if signup retried
+    if (existingUser) {
+      // Ensure wallet exists for this user too
+      await this.walletService.ensureUserWallet(existingUser._id);
+      return this.sanitizeUser(existingUser);
+    }
+
+    // 2. Create new user
     const user = await this.usersService.createUser(payload);
+
+    // 3. Ensure wallet exists (safe & idempotent)
+    await this.walletService.ensureUserWallet(user._id);
+
+    // 4. Return sanitized user
     return this.sanitizeUser(user);
   }
 

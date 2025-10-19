@@ -1,40 +1,51 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model, Types } from 'mongoose';
-import { KYC, KYCDocument } from './schemas/kyc.schema';
 import { getAge } from 'src/utils/helpers';
 import { UserDocument } from '../users/schemas/user.schema';
+import { WalletService } from '../wallets/wallet.service';
+import { KYC, KYCDocument } from './schemas/kyc.schema';
 
 @Injectable()
 export class KycService {
   constructor(
     @InjectModel(KYC.name) private readonly kycmodel: Model<KYCDocument>,
+    private readonly walletService: WalletService,
   ) {}
 
   async createKYC(payload: KYC, user: UserDocument): Promise<KYCDocument> {
-    //validate name [production only]
     const isDevEnv = process.env.NODE_ENV !== 'production';
+
+    // 1. Validate name (in production only)
     if (!isDevEnv) {
-      if (
-        payload?.identity_data.first_name?.toLowerCase() !==
-          user?.first_name?.toLowerCase() ||
-        payload?.identity_data?.last_name?.toLowerCase() !==
-          user?.last_name?.toLowerCase()
-      ) {
+      const firstNameMatch =
+        payload.identity_data.first_name?.toLowerCase() ===
+        user.first_name?.toLowerCase();
+      const lastNameMatch =
+        payload.identity_data.last_name?.toLowerCase() ===
+        user.last_name?.toLowerCase();
+
+      if (!firstNameMatch || !lastNameMatch) {
         throw new BadRequestException(
-          `names do not match with names on your ${payload.id_type.replaceAll('_', ' ')} record`,
+          `Names do not match with your ${payload.id_type.replaceAll('_', ' ')} record.`,
         );
       }
     }
 
-    //validate age
+    // 2. Validate age
     if (getAge(payload.identity_data.date_of_birth) < 18) {
       throw new BadRequestException(
-        'kyc verified, however users under 18 are not permitted to proceed, kindly contact support for further assistance',
+        'KYC verified, however users under 18 are not permitted to proceed. Kindly contact support for further assistance.',
       );
     }
 
-    return await this.kycmodel.create(payload);
+    // 3. Create KYC record
+    const kycRecord = await this.kycmodel.create(payload);
+
+    // 4. Activate user's wallet (idempotent + safe)
+    await this.walletService.activateUserWallet(user._id);
+
+    return kycRecord;
   }
 
   async findById(id: string): Promise<KYCDocument | null> {
