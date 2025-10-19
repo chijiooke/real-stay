@@ -6,6 +6,7 @@ import { TransactionModule } from '../transactions/transactions.module';
 import { bookingsController } from './bookings.controller';
 import { BookingService } from './bookings.service';
 import { Booking, BookingSchema } from './schemas/bookings.schema';
+import { WalletService } from '../wallets/wallet.service';
 
 @Module({
   imports: [
@@ -14,7 +15,7 @@ import { Booking, BookingSchema } from './schemas/bookings.schema';
     ListingModule,
     TransactionModule,
   ],
-  providers: [BookingService],
+  providers: [BookingService, WalletService],
   controllers: [bookingsController],
   exports: [BookingService],
 })

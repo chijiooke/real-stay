@@ -1,25 +1,21 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import {
-  BadRequestException,
-  Injectable,
-  InternalServerErrorException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { FilterQuery, Model, Types } from 'mongoose';
-import { PAYMENT_PROVIDER } from 'src/constants/constants';
+import { ClientSession, FilterQuery, Model, Types } from 'mongoose';
 import {
   buildSearchQuery,
   getPagingParameters,
   normalizeObjectIdFields,
 } from 'src/utils/helpers';
+import { PaystackInitPaymentResponse } from './interfaces/paystack.interface';
 import {
+  PAYMENT_PROVIDER,
   PaystackVerificationResponse,
-  TransactionAttrs,
   TransactionStatusEnum,
+  TransactionTypeEnum,
 } from './interfaces/transactions.interfaces';
 import { PaystackService } from './payment-providers/paystack';
 import { Transaction, TransactionDocument } from './schemas/transaction.schema';
-import { PaystackInitPaymentResponse } from './interfaces/paystack.interface';
 
 //TO DO: re-write using strategy pattern
 @Injectable()
@@ -39,49 +35,87 @@ export class TransactionsService {
 
   async validatePayment(
     reference: string,
-    customer_id?: Types.ObjectId,
-    booking_id?: Types.ObjectId,
-  ): Promise<TransactionDocument> {
-    const res: PaystackVerificationResponse =
+    session: ClientSession,
+    customerId?: Types.ObjectId,
+    bookingId?: Types.ObjectId,
+  ): Promise<Partial<TransactionDocument>> {
+    // 1. Verify payment with Paystack
+    const response: PaystackVerificationResponse =
       await this.paystackservice.verifyTransaction(reference);
-
-    if (!res.status) {
-      throw new BadRequestException('Payment not successful');
+  
+    if (!response.status || response.data.status !== 'success') {
+      throw new BadRequestException('Payment verification failed or was not successful.');
     }
-
-    const trxn: TransactionAttrs = {
-      amount: res.data.amount, // Paystack returns amount in kobo
-      currency: res.data.currency,
-      status: res.data.status as TransactionStatusEnum,
+  
+    // 2. Normalize amount (Paystack returns amount in kobo)
+    const amountInNaira = response.data.amount / 100;
+  
+    // 3. Construct transaction data
+    const transaction: Partial<Transaction> = {
+      customer_id: customerId,
+      booking_id: bookingId,
+      amount: amountInNaira,
+      currency: response.data.currency || 'NGN',
+      status: TransactionStatusEnum.SUCCESS,
       reference,
       provider: PAYMENT_PROVIDER.PAYSTACK,
-      customer_id: customer_id,
-      booking_id: booking_id,
+      type: TransactionTypeEnum.PAYMENT,
+      description: `Payment for booking ${bookingId?.toString() ?? ''}`,
+      meta: {
+        gateway_response: response.data.gateway_response,
+        channel: response.data.channel,
+        paid_at: response.data.paid_at,
+        ip_address: response.data.ip_address,
+        authorization: response.data.authorization,
+        customer_email: response.data.customer?.email,
+      },
     };
+  
+    // 4. Persist transaction atomically
+    return this.createTransaction(transaction, session);
+  }
+  
 
-    return this.createTransaction(trxn);
+  async recordSplitTransaction(
+    data: {
+      booking_id: Types.ObjectId;
+      transactionRef: string;
+      customer_id: Types.ObjectId;
+      company_id: Types.ObjectId;
+      customerShare: number;
+      companyShare: number;
+    },
+    options: { session?: ClientSession },
+  ) {
+    return this.transactionModel.create(
+      [
+        {
+          reference: data.transactionRef,
+          type: 'CREDIT',
+          wallet_owner: data.customer_id,
+          amount: data.customerShare,
+          description: 'Customer booking reward',
+        },
+        {
+          reference: data.transactionRef,
+          type: 'CREDIT',
+          wallet_owner: data.company_id,
+          amount: data.companyShare,
+          description: 'Company booking revenue',
+        },
+      ],
+      { session: options.session },
+    );
   }
 
   async createTransaction(
-    payload: TransactionAttrs,
+    data: Partial<Transaction>,
+    session?: ClientSession,
   ): Promise<TransactionDocument> {
-    try {
-      const doc = await this.transactionModel.create(payload);
-      return doc.toObject();
-    } catch (error) {
-      if (error.code === 11000) {
-        const duplicateField = Object.keys(
-          error.keyPattern || {},
-        )[0]?.replaceAll('_', ' ');
-        throw new BadRequestException(
-          `The ${duplicateField} is already in use.`,
-        );
-      }
-
-      throw new InternalServerErrorException(
-        error.message || 'Failed to create transaction',
-      );
-    }
+    const [transaction] = await this.transactionModel.create([data], {
+      session,
+    });
+    return transaction;
   }
 
   //To Do: write pulling logic, handle reversals

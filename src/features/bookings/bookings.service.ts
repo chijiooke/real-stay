@@ -4,21 +4,30 @@ import {
   ConflictException,
   Injectable,
   InternalServerErrorException,
+  NotFoundException,
 } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { FilterQuery, Model, Types } from 'mongoose';
-import { buildSearchQuery, getPagingParameters, normalizeObjectIdFields } from 'src/utils/helpers';
+import { InjectConnection, InjectModel } from '@nestjs/mongoose';
+import { ClientSession, Connection, FilterQuery, Model, Types } from 'mongoose';
+import {
+  buildSearchQuery,
+  getPagingParameters,
+  normalizeObjectIdFields,
+} from 'src/utils/helpers';
 import { BookingDocument, Booking } from './schemas/bookings.schema';
 import { BookingStatusEnum } from './interfaces/bookings.interfaces';
 import { NotFoundError } from 'rxjs';
 import { TransactionsService } from '../transactions/transactions.service';
+import { WalletService } from '../wallets/wallet.service';
 
 @Injectable()
 export class BookingService {
   constructor(
     @InjectModel(Booking.name)
+    @InjectConnection()
+    private readonly connection: Connection,
     private readonly bookingModel: Model<BookingDocument>,
     private readonly transactionService: TransactionsService,
+    private readonly walletService: WalletService,
   ) {}
 
   async requestReservation(payload: Booking): Promise<BookingDocument> {
@@ -47,7 +56,7 @@ export class BookingService {
     status: BookingStatusEnum,
     bookingId: string,
   ): Promise<BookingDocument | null> {
-    const booking = await this.getgetBookingByID(bookingId);
+    const booking = await this.getBookingByID(bookingId);
     if (!booking) {
       throw new NotFoundError('booking not found, kindly confirm booking id');
     }
@@ -70,24 +79,89 @@ export class BookingService {
     transactionRef: string,
     bookingId: string,
   ): Promise<BookingDocument | null> {
-    const booking = await this.getgetBookingByID(bookingId);
-
+    const booking = await this.getBookingByID(bookingId);
     if (!booking) {
-      throw new NotFoundError('booking not found, kindly confirm booking id');
+      throw new NotFoundException('Booking not found. Kindly confirm booking ID.');
     }
-
-    //verify payment status with paymentRef
-    const transaction = await this.transactionService.validatePayment(transactionRef, booking?.customer_id, booking?._id);
-
-    if (!transaction) {
-      throw new NotFoundError('transaction not found, kindly confirm transaction reference');
+  
+    const session = await this.connection.startSession();
+    session.startTransaction();
+  
+    try {
+      // 1. Validate payment
+      const transaction = await this.transactionService.validatePayment(
+        transactionRef,
+        session,
+        booking.customer_id,
+        booking._id,
+      );
+  
+      if (!transaction) {
+        throw new NotFoundException('Transaction not found. Kindly confirm reference.');
+      }
+  
+      // 2. Compute split logic
+      const totalAmount = transaction.amount || 0;
+      const companyShare = totalAmount * 0.9;
+      const customerShare = totalAmount * 0.1;
+  
+      // 3. Get company wallet
+      const companyWallet = await this.walletService.getCompanyWallet();
+      if (!companyWallet) {
+        throw new InternalServerErrorException('Company wallet not found.');
+      }
+  
+      // 4. Perform atomic wallet credits
+      await Promise.all([
+        this.walletService.creditWallet(booking.customer_id, customerShare, {
+          reference: transactionRef,
+          type: 'BOOKING_REWARD',
+          description: `Reward for booking ${booking._id}`,
+          session,
+        }),
+        this.walletService.creditCompanyWallet(companyShare, {
+          reference: transactionRef,
+          type: 'BOOKING_REVENUE',
+          description: `Company share for booking ${booking._id}`,
+          session,
+        }),
+      ]);
+  
+      // 5. Record accounting entries
+      await this.transactionService.recordSplitTransaction(
+        {
+          booking_id: booking._id,
+          transactionRef,
+          customer_id: booking.customer_id,
+          company_id: companyWallet.id,
+          customerShare,
+          companyShare,
+        },
+        { session },
+      );
+  
+      // 6. Update booking
+      await this.updateByFilter(
+        { _id: booking._id },
+        {
+          ...booking.toObject(),
+          status: BookingStatusEnum.BOOKED,
+          paymentRef: transactionRef,
+        },
+        { session },
+      );
+  
+      // 7. Commit and return
+      await session.commitTransaction();
+      return booking;
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
     }
-
-    booking.paymentRef = transactionRef;
-    booking.status = BookingStatusEnum.BOOKED;
-
-    return this.updateByFilter({ _id: booking._id }, booking);
   }
+  
 
   async createBooking(payload: Booking): Promise<BookingDocument> {
     try {
@@ -109,7 +183,7 @@ export class BookingService {
   }
 
   //To Do: hide password from response
-  async getgetBookingByID(bookingID: string): Promise<BookingDocument | null> {
+  async getBookingByID(bookingID: string): Promise<BookingDocument | null> {
     if (!Types.ObjectId.isValid(bookingID)) {
       throw new BadRequestException('invalid id');
     }
@@ -140,9 +214,7 @@ export class BookingService {
     return result.length > 0 ? result[0] : null;
   }
 
-  async getBookings(
-    filter: FilterQuery<Booking>,
-  ): Promise<{
+  async getBookings(filter: FilterQuery<Booking>): Promise<{
     bookings: BookingDocument[];
     pagination: {
       total_items: number;
@@ -237,11 +309,15 @@ export class BookingService {
   }
 
   async updateByFilter(
-    filter: FilterQuery<Booking>, // Accepts any filter object
+    filter: FilterQuery<Booking>,
     payload: Partial<Booking>,
+    options?: { session?: ClientSession },
   ): Promise<BookingDocument | null> {
     return this.bookingModel
-      .findOneAndUpdate(filter, payload, { new: true })
+      .findOneAndUpdate(filter, payload, {
+        new: true,
+        session: options?.session,
+      })
       .lean()
       .exec();
   }

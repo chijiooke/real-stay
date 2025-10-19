@@ -24,6 +24,9 @@ export class Wallet {
 
   @Prop({ required: true, default: true })
   can_deposit: boolean;
+
+  @Prop()
+  virtual_account_no: string;
 }
 
 // The Document type = schema class + mongoose document properties

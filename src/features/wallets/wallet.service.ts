@@ -6,7 +6,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { FilterQuery, Model, Types } from 'mongoose';
+import { ClientSession, FilterQuery, Model, Types } from 'mongoose';
 import { WalletStatusEnum } from './interfaces/wallet.interfaces';
 import { Wallet, WalletDocument } from './schemas/wallet.schema';
 import { User, UserDocument } from '../users/schemas/user.schema';
@@ -167,6 +167,77 @@ export class WalletService implements OnModuleInit {
       .lean();
   }
 
+  async updateWalletBalance(
+    walletId: string,
+    amount: number,
+    session: ClientSession,
+  ) {
+    return this.walletModel.updateOne(
+      { _id: walletId },
+      { $inc: { amount } },
+      { session },
+    );
+  }
+
+  async creditWallet(
+    wallet_id: Types.ObjectId,
+    amount: number,
+    meta: {
+      reference: string;
+      type: string;
+      description?: string;
+      session?: ClientSession;
+    },
+  ) {
+    return this.walletModel.updateOne(
+      { _id: wallet_id },
+      {
+        $inc: { balance: amount },
+        $push: {
+          transactions: {
+            reference: meta.reference,
+            amount,
+            type: meta.type,
+            description: meta.description,
+            createdAt: new Date(),
+          },
+        },
+      },
+      { session: meta.session },
+    );
+  }
+
+  async creditCompanyWallet(
+    amount: number,
+    meta: {
+      reference: string;
+      type: string;
+      description?: string;
+      session?: ClientSession;
+    },
+  ) {
+    return this.walletModel.updateOne(
+      { is_company_wallet: "true" },
+      {
+        $inc: { balance: amount },
+        $push: {
+          transactions: {
+            reference: meta.reference,
+            amount,
+            type: meta.type,
+            description: meta.description,
+            createdAt: new Date(),
+          },
+        },
+      },
+      { session: meta.session },
+    );
+  }
+
+  async getCompanyWallet() {
+    return this.walletModel.findOne({ is_company_wallet: true });
+  }
+
   //To Do: write pulling logic, handle reversals
 
   //To Do: hide password from response
@@ -191,23 +262,6 @@ export class WalletService implements OnModuleInit {
     ]);
 
     return wallet || null;
-  }
-
-  async updateWalletBalance(
-    walletId: string,
-    amount: number,
-  ): Promise<WalletDocument | null> {
-    if (!Types.ObjectId.isValid(walletId)) {
-      throw new BadRequestException('Invalid wallet ID');
-    }
-
-    return this.walletModel
-      .findByIdAndUpdate(
-        walletId,
-        { $set: { amount } },
-        { new: true, lean: true },
-      )
-      .exec();
   }
 
   async updateWalletByFilter(

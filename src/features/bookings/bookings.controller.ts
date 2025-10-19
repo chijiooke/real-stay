@@ -54,7 +54,7 @@ export class bookingsController {
   @Get('/:id')
   @UseGuards(JwtAuthGuard)
   async getByListingId(@Param('id') id: string) {
-    return this.bookingService.getgetBookingByID(id);
+    return this.bookingService.getBookingByID(id);
   }
 
   @Patch('/:id/:status')
@@ -66,7 +66,7 @@ export class bookingsController {
     @Param('status', ParseBookingStatusPipe) status: BookingStatusEnum,
   ) {
     //if user is not an admin or host prevent this action
-    const booking = await this.bookingService.getgetBookingByID(bookingId);
+    const booking = await this.bookingService.getBookingByID(bookingId);
 
     if (!booking) {
       throw new NotFoundException('booking not found');

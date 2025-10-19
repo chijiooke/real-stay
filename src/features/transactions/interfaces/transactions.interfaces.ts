@@ -1,4 +1,4 @@
-import { Types } from "mongoose";
+import { Types } from 'mongoose';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export enum TransactionStatusEnum {
@@ -98,4 +98,16 @@ export interface TransactionAttrs {
   reference: string;
   provider: string;
   currency: string;
+}
+
+// 'PAYMENT', 'CREDIT', 'DEBIT', 'REFUND'
+export enum TransactionTypeEnum {
+  PAYMENT = 'PAYMENT',
+  CREDIT = 'CREDIT',
+  DEBIT = 'DEBIT',
+  REFUND = 'REFUND',
+}
+
+export enum PAYMENT_PROVIDER {
+  PAYSTACK = 'paystack',
 }
