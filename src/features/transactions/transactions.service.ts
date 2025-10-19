@@ -16,6 +16,7 @@ import {
 } from './interfaces/transactions.interfaces';
 import { PaystackService } from './payment-providers/paystack';
 import { Transaction, TransactionDocument } from './schemas/transaction.schema';
+import { CurrencyEnum } from '../wallets/interfaces/wallet.interfaces';
 
 //TO DO: re-write using strategy pattern
 @Injectable()
@@ -42,19 +43,21 @@ export class TransactionsService {
     // 1. Verify payment with Paystack
     const response: PaystackVerificationResponse =
       await this.paystackservice.verifyTransaction(reference);
-  
+
     if (!response.status || response.data.status !== 'success') {
-      throw new BadRequestException('Payment verification failed or was not successful.');
+      throw new BadRequestException(
+        'Payment verification failed or was not successful.',
+      );
     }
-  
+
     // 2. Normalize amount (Paystack returns amount in kobo)
-    const amountInNaira = response.data.amount / 100;
-  
+    // const amountInNaira = response.data.amount / 100;
+
     // 3. Construct transaction data
     const transaction: Partial<Transaction> = {
       customer_id: customerId,
       booking_id: bookingId,
-      amount: amountInNaira,
+      amount: response.data.amount,
       currency: response.data.currency || 'NGN',
       status: TransactionStatusEnum.SUCCESS,
       reference,
@@ -68,20 +71,21 @@ export class TransactionsService {
         ip_address: response.data.ip_address,
         authorization: response.data.authorization,
         customer_email: response.data.customer?.email,
+        status: response.data.status,
       },
     };
-  
+
     // 4. Persist transaction atomically
     return this.createTransaction(transaction, session);
   }
-  
 
   async recordSplitTransaction(
     data: {
       booking_id: Types.ObjectId;
       transactionRef: string;
-      customer_id: Types.ObjectId;
-      company_id: Types.ObjectId;
+      property_owner_wallet_id: Types.ObjectId;
+      property_owner_customer_id: Types.ObjectId;
+      company_wallet_id: Types.ObjectId;
       customerShare: number;
       companyShare: number;
     },
@@ -92,19 +96,28 @@ export class TransactionsService {
         {
           reference: data.transactionRef,
           type: 'CREDIT',
-          wallet_owner: data.customer_id,
+          wallet_id: data.property_owner_wallet_id,
+          customer_id: data.property_owner_customer_id,
           amount: data.customerShare,
-          description: 'Customer booking reward',
+          description: 'Payment for booking',
+          currency: CurrencyEnum.NAIRA,
+          status: TransactionStatusEnum.SUCCESS,
+          booking_id: data.booking_id,
+          provider: PAYMENT_PROVIDER.PAYSTACK,
         },
         {
           reference: data.transactionRef,
           type: 'CREDIT',
-          wallet_owner: data.company_id,
+          wallet_owner: data.company_wallet_id,
           amount: data.companyShare,
           description: 'Company booking revenue',
+          currency: CurrencyEnum.NAIRA,
+          status: TransactionStatusEnum.SUCCESS,
+          provider: PAYMENT_PROVIDER.PAYSTACK,
+          booking_id: data.booking_id,
         },
       ],
-      { session: options.session },
+      { session: options.session, ordered: true },
     );
   }
 
@@ -231,6 +244,49 @@ export class TransactionsService {
         limit,
       },
     };
+  }
+
+  async getTransaction(
+    filter: FilterQuery<Transaction>,
+    options?: { session?: ClientSession },
+  ): Promise<TransactionDocument | null> {
+    // Normalize ObjectId fields
+    filter = normalizeObjectIdFields(filter, [
+      'customer_id',
+      'property_owner_id',
+      'listing_id',
+    ]);
+
+    const pipeline: any[] = [
+      { $match: filter },
+      // Lookup customer without password
+      {
+        $lookup: {
+          from: 'users',
+          let: { customerId: '$customer_id' },
+          pipeline: [
+            { $match: { $expr: { $eq: ['$_id', '$$customerId'] } } },
+            { $project: { password: 0 } }, // exclude password
+          ],
+          as: 'customer',
+        },
+      },
+      { $unwind: { path: '$customer', preserveNullAndEmptyArrays: true } },
+    ];
+
+    // Build aggregation options
+    const aggregateOptions: any = {};
+    if (options?.session) {
+      aggregateOptions.session = options.session;
+    }
+
+    // Run aggregation with session support
+    const result = await this.transactionModel
+      .aggregate(pipeline)
+      .session(options?.session || null)
+      .exec();
+
+    return result[0] || null;
   }
 
   async updateTransactionByFilter(

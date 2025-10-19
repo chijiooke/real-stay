@@ -11,7 +11,7 @@ export class Wallet {
   status: WalletStatusEnum;
 
   @Prop({ type: Number, required: true })
-  amount: number;
+  balance: number;
 
   @Prop({ required: true, default: 'NGN' })
   currency: string;

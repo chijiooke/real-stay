@@ -3,11 +3,22 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  NotFoundException,
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { ClientSession, FilterQuery, Model, Types } from 'mongoose';
-import { WalletStatusEnum } from './interfaces/wallet.interfaces';
+import {
+  ClientSession,
+  FilterQuery,
+  Model,
+  ModifyResult,
+  Types,
+} from 'mongoose';
+import {
+  WalletCreditMeta,
+  WalletStatusEnum,
+  WalletTransactionEntry,
+} from './interfaces/wallet.interfaces';
 import { Wallet, WalletDocument } from './schemas/wallet.schema';
 import { User, UserDocument } from '../users/schemas/user.schema';
 
@@ -58,7 +69,7 @@ export class WalletService implements OnModuleInit {
       return await this.walletModel.create({
         is_company_wallet: true,
         status: WalletStatusEnum.ACTIVE, // adjust to your enum
-        amount: 0,
+        balance: 0,
         currency: 'NGN',
         can_withdraw: true,
         can_deposit: true,
@@ -82,7 +93,7 @@ export class WalletService implements OnModuleInit {
   async ensureAllUserWallet(): Promise<void> {
     // 1. Fetch all user IDs
     const users = await this.userModel
-      .find({ user_type: { $ne: 'admin' } }, { _id: 1 })
+      .find({ user_type: { $ne: 'admin' } })
       .lean();
     if (!users.length) return;
 
@@ -105,13 +116,14 @@ export class WalletService implements OnModuleInit {
       (u) => !existingIds.has(u._id.toString()),
     );
 
+    console.log({ usersWithoutWallet });
     if (!usersWithoutWallet.length) return;
 
     // 4. Create wallets in bulk for missing users
     const newWallets = usersWithoutWallet.map((u) => ({
       customer_id: u._id,
       status: WalletStatusEnum.ACTIVE, // adjust as needed
-      amount: 0,
+      balance: 0,
       currency: 'NGN',
       can_withdraw: true,
       can_deposit: true,
@@ -133,7 +145,7 @@ export class WalletService implements OnModuleInit {
         status: WalletStatusEnum.INACTIVE,
         can_withdraw: false,
         can_deposit: false,
-        amount: 0,
+        balance: 0,
       });
     } catch (err) {
       // Handle race condition (e.g., two concurrent signups)
@@ -174,12 +186,12 @@ export class WalletService implements OnModuleInit {
   ) {
     return this.walletModel.updateOne(
       { _id: walletId },
-      { $inc: { amount } },
+      { $inc: { balance: amount } },
       { session },
     );
   }
 
-  async creditWallet(
+  async creditWalletByWalletID(
     wallet_id: Types.ObjectId,
     amount: number,
     meta: {
@@ -207,63 +219,6 @@ export class WalletService implements OnModuleInit {
     );
   }
 
-  async creditCompanyWallet(
-    amount: number,
-    meta: {
-      reference: string;
-      type: string;
-      description?: string;
-      session?: ClientSession;
-    },
-  ) {
-    return this.walletModel.updateOne(
-      { is_company_wallet: "true" },
-      {
-        $inc: { balance: amount },
-        $push: {
-          transactions: {
-            reference: meta.reference,
-            amount,
-            type: meta.type,
-            description: meta.description,
-            createdAt: new Date(),
-          },
-        },
-      },
-      { session: meta.session },
-    );
-  }
-
-  async getCompanyWallet() {
-    return this.walletModel.findOne({ is_company_wallet: true });
-  }
-
-  //To Do: write pulling logic, handle reversals
-
-  //To Do: hide password from response
-  async getWalletByCustomerID(
-    customerId: string,
-  ): Promise<WalletDocument | null> {
-    if (!Types.ObjectId.isValid(customerId)) {
-      throw new BadRequestException('Invalid wallet ID');
-    }
-
-    const [wallet] = await this.walletModel.aggregate([
-      { $match: { customer_id: new Types.ObjectId(customerId) } },
-      {
-        $lookup: {
-          from: 'users',
-          let: { customerId: { $toObjectId: '$customer_id' } },
-          pipeline: [{ $match: { $expr: { $eq: ['$_id', '$$customerId'] } } }],
-          as: 'customer',
-        },
-      },
-      { $unwind: { path: '$customer', preserveNullAndEmptyArrays: true } },
-    ]);
-
-    return wallet || null;
-  }
-
   async updateWalletByFilter(
     filter: FilterQuery<Wallet>, // Accepts any filter object
     payload: Partial<Wallet>,
@@ -272,5 +227,369 @@ export class WalletService implements OnModuleInit {
       .findOneAndUpdate(filter, payload, { new: true })
       .lean()
       .exec();
+  }
+
+  //===============================
+
+  /**
+   * Credit a customer wallet by customer ID
+   * @param customer_id - Customer's ObjectId
+   * @param amount - Amount to credit (must be positive)
+   * @param meta - Transaction metadata including reference, type, description, and session
+   * @returns Updated wallet document
+   */
+  async creditWalletByCustomerID(
+    customer_id: Types.ObjectId,
+    amount: number,
+    meta: WalletCreditMeta,
+  ): Promise<ModifyResult<WalletDocument>> {
+    // Validation
+    if (!customer_id || !Types.ObjectId.isValid(customer_id)) {
+      throw new BadRequestException('Invalid customer ID');
+    }
+
+    if (amount <= 0) {
+      throw new BadRequestException('Credit amount must be greater than zero');
+    }
+
+    if (!meta.reference) {
+      throw new BadRequestException('Transaction reference is required');
+    }
+
+    console.log(
+      `Crediting wallet for customer: ${customer_id}, amount: ${amount}`,
+    );
+
+    const transactionEntry: WalletTransactionEntry = {
+      reference: meta.reference,
+      amount,
+      type: meta.type,
+      description: meta.description || `Wallet credit - ${meta.type}`,
+      createdAt: new Date(),
+      status: 'SUCCESS',
+    };
+
+    const updateOptions: any = {
+      new: true, // Return updated document
+      runValidators: true, // Run schema validators
+    };
+
+    if (meta.session) {
+      updateOptions.session = meta.session;
+    }
+
+    // Perform atomic update
+    const updatedWallet = await this.walletModel.findOneAndUpdate(
+      {
+        customer_id,
+        is_company_wallet: false, // Ensure it's a customer wallet
+        can_deposit: true, // Ensure deposits are allowed
+      },
+      {
+        $inc: { balance: amount },
+        $push: {
+          transactions: {
+            $each: [transactionEntry],
+            $position: 0, // Add to beginning of array
+            $slice: 100, // Keep only last 100 transactions in embedded array
+          },
+        },
+      },
+      updateOptions,
+    );
+
+    if (!updatedWallet) {
+      throw new NotFoundException(
+        `Wallet not found for customer ${customer_id} or deposits are disabled`,
+      );
+    }
+
+    console.log(
+      `✅ Wallet credited successfully. New balance: ${updatedWallet?.value?.balance}`,
+    );
+
+    return updatedWallet;
+  }
+
+  /**
+   * Credit the company wallet
+   * @param amount - Amount to credit (must be positive)
+   * @param meta - Transaction metadata including reference, type, description, and session
+   * @returns Updated wallet document
+   */
+  async creditCompanyWallet(
+    amount: number,
+    meta: WalletCreditMeta,
+  ): Promise<ModifyResult<WalletDocument>> {
+    // Validation
+    if (amount <= 0) {
+      throw new BadRequestException('Credit amount must be greater than zero');
+    }
+
+    if (!meta.reference) {
+      throw new BadRequestException('Transaction reference is required');
+    }
+
+    console.log(`Crediting company wallet, amount: ${amount}`);
+
+    const transactionEntry: WalletTransactionEntry = {
+      reference: meta.reference,
+      amount,
+      type: meta.type,
+      description: meta.description || `Company revenue - ${meta.type}`,
+      createdAt: new Date(),
+      status: 'SUCCESS',
+    };
+
+    const updateOptions: any = {
+      new: true,
+      runValidators: true,
+    };
+
+    if (meta.session) {
+      updateOptions.session = meta.session;
+    }
+
+    // Perform atomic update - FIXED: $inc balance, not amount
+    const updatedWallet = await this.walletModel
+      .findOneAndUpdate(
+        {
+          is_company_wallet: true, // Use boolean instead of string
+          can_deposit: true,
+        },
+        {
+          $inc: { balance: amount }, // FIXED: was $inc: { amount }
+          $push: {
+            transactions: {
+              $each: [transactionEntry],
+              $position: 0,
+              $slice: 100,
+            },
+          },
+        },
+        updateOptions,
+      )
+      .exec();
+
+    if (!updatedWallet) {
+      throw new NotFoundException(
+        'Company wallet not found or deposits are disabled',
+      );
+    }
+
+    console.log(
+      `✅ Company wallet credited successfully. New balance: ${updatedWallet.value?.balance}`,
+    );
+
+    return updatedWallet;
+  }
+
+  /**
+ * Get company wallet
+ * @param options - Optional session for transactions
+ * @returns Company wallet document
+ */
+async getCompanyWallet(
+  options?: { session?: ClientSession }
+): Promise<WalletDocument | null> {
+  const query = this.walletModel.findOne({ 
+    is_company_wallet: true 
+  });
+  
+  if (options?.session) {
+    query.session(options.session);
+  }
+  
+  return query.exec();
+}
+
+/**
+ * Get wallet by customer ID with user details
+ * @param customerId - Customer's ID as string
+ * @param options - Optional session for transactions
+ * @returns Wallet document with populated customer details
+ */
+async getWalletByCustomerID(
+  customerId: string,
+  options?: { session?: ClientSession }
+): Promise<WalletDocument | null> {
+  if (!Types.ObjectId.isValid(customerId)) {
+    throw new BadRequestException('Invalid customer ID');
+  }
+
+  const pipeline = [
+    { 
+      $match: { 
+        customer_id: new Types.ObjectId(customerId),
+      } 
+    },
+    {
+      $lookup: {
+        from: 'users',
+        let: { customerId: '$customer_id' },
+        pipeline: [
+          { $match: { $expr: { $eq: ['$_id', '$$customerId'] } } },
+          { $project: { password: 0 } }, // Hide password from response
+        ],
+        as: 'customer',
+      },
+    },
+    { $unwind: { path: '$customer', preserveNullAndEmptyArrays: true } },
+  ];
+
+  const aggregation = this.walletModel.aggregate(pipeline);
+  
+  if (options?.session) {
+    aggregation.session(options.session);
+  }
+
+  const [wallet] = await aggregation.exec();
+  
+  return wallet || null;
+}
+
+  /**
+   * Debit a customer wallet by customer ID
+   * @param customer_id - Customer's ObjectId
+   * @param amount - Amount to debit (must be positive)
+   * @param meta - Transaction metadata
+   * @returns Updated wallet document
+   */
+  // async debitWalletByCustomerID(
+  //   customer_id: Types.ObjectId,
+  //   amount: number,
+  //   meta: WalletCreditMeta,
+  // ): Promise<WalletDocument> {
+  //   if (!customer_id || !Types.ObjectId.isValid(customer_id)) {
+  //     throw new BadRequestException('Invalid customer ID');
+  //   }
+
+  //   if (amount <= 0) {
+  //     throw new BadRequestException('Debit amount must be greater than zero');
+  //   }
+
+  //   if (!meta.reference) {
+  //     throw new BadRequestException('Transaction reference is required');
+  //   }
+
+  //   console.log(
+  //     `Debiting wallet for customer: ${customer_id}, amount: ${amount}`,
+  //   );
+
+  //   // First check if wallet has sufficient balance
+  //   const wallet = await this.walletModel.findOne(
+  //     { customer_id, is_company_wallet: false },
+  //     null,
+  //     { session: meta.session },
+  //   );
+
+  //   if (!wallet) {
+  //     throw new NotFoundException(
+  //       `Wallet not found for customer ${customer_id}`,
+  //     );
+  //   }
+
+  //   if (!wallet.can_withdraw) {
+  //     throw new BadRequestException('Withdrawals are disabled for this wallet');
+  //   }
+
+  //   if (wallet.balance < amount) {
+  //     throw new BadRequestException(
+  //       `Insufficient balance. Available: ${wallet.balance}, Required: ${amount}`,
+  //     );
+  //   }
+
+  //   const transactionEntry: WalletTransactionEntry = {
+  //     reference: meta.reference,
+  //     amount: -amount, // Negative for debit
+  //     type: meta.type,
+  //     description: meta.description || `Wallet debit - ${meta.type}`,
+  //     createdAt: new Date(),
+  //     status: 'SUCCESS',
+  //   };
+
+  //   const updateOptions: any = {
+  //     new: true,
+  //     runValidators: true,
+  //   };
+
+  //   if (meta.session) {
+  //     updateOptions.session = meta.session;
+  //   }
+
+  //   const updatedWallet = await this.walletModel.findOneAndUpdate(
+  //     {
+  //       customer_id,
+  //       is_company_wallet: false,
+  //       balance: { $gte: amount }, // Double-check sufficient balance
+  //     },
+  //     {
+  //       $inc: { balance: -amount },
+  //       $push: {
+  //         transactions: {
+  //           $each: [transactionEntry],
+  //           $position: 0,
+  //           $slice: 100,
+  //         },
+  //       },
+  //     },
+  //     updateOptions,
+  //   );
+
+  //   if (!updatedWallet) {
+  //     throw new InternalServerErrorException(
+  //       'Failed to debit wallet. Possible race condition or insufficient balance.',
+  //     );
+  //   }
+
+  //   console.log(
+  //     `✅ Wallet debited successfully. New balance: ${updatedWallet.balance}`,
+  //   );
+
+  //   return updatedWallet;
+  // }
+
+  /**
+   * Get wallet balance by customer ID
+   * @param customer_id - Customer's ObjectId
+   * @param session - Optional MongoDB session
+   * @returns Current wallet balance
+   */
+  async getWalletBalance(
+    customer_id: Types.ObjectId,
+    session?: ClientSession,
+  ): Promise<number> {
+    const wallet = await this.walletModel.findOne(
+      { customer_id, is_company_wallet: false },
+      { balance: 1 },
+      { session },
+    );
+
+    if (!wallet) {
+      throw new NotFoundException(
+        `Wallet not found for customer ${customer_id}`,
+      );
+    }
+
+    return wallet.balance;
+  }
+
+  /**
+   * Check if a transaction reference already exists
+   * @param reference - Transaction reference to check
+   * @param session - Optional MongoDB session
+   * @returns true if reference exists
+   */
+  async isDuplicateTransaction(
+    reference: string,
+    session?: ClientSession,
+  ): Promise<boolean> {
+    const wallet = await this.walletModel.findOne(
+      { 'transactions.reference': reference },
+      { _id: 1 },
+      { session },
+    );
+
+    return !!wallet;
   }
 }
