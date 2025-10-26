@@ -90,6 +90,14 @@ export class BookingService {
       );
     }
 
+
+    //validatio to prevent payment for un-reserved bookings
+    if (booking.status?.toUpperCase() !== BookingStatusEnum.RESERVED) {
+      throw new BadRequestException(
+        "Kindly wait for host to confirm your reservation before making payment.",
+      );
+    }
+
     const session = await this.connection.startSession();
     session.startTransaction();
 
