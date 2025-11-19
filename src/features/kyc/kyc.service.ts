@@ -14,7 +14,7 @@ export class KycService {
   ) {}
 
   async createKYC(payload: KYC, user: UserDocument): Promise<KYCDocument> {
-    const isDevEnv = process.env.NODE_ENV !== 'production';
+    const isDevEnv = process.env.ENVIRONMENT !== 'production';
 
     // 1. Validate name (in production only)
     if (!isDevEnv) {

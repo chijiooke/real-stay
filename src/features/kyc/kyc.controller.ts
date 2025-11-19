@@ -38,7 +38,7 @@ export class KYCController {
     const authUser = req.user;
 
     // Convert image buffer to base64
-    const isDevEnv = process.env.NODE_ENV !== 'production';
+    const isDevEnv = process.env.ENVIRONMENT !== 'production';
     if (!file) {
       throw new BadRequestException('Selfie image is required');
     }
