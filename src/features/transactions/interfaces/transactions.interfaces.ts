@@ -106,6 +106,10 @@ export enum TransactionTypeEnum {
   CREDIT = 'CREDIT',
   DEBIT = 'DEBIT',
   REFUND = 'REFUND',
+
+  //wallet transactions
+  WALLET_OUTFLOW = 'WALLET_OUTFLOW',
+  WALLET_INFLOW = 'WALLET_INFLOW',
 }
 
 export enum PAYMENT_PROVIDER {

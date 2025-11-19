@@ -55,6 +55,9 @@ export class Transaction {
   // Audit Metadata
   @Prop({ type: Object, required: false })
   meta?: Record<string, unknown>; // gateway response, channel, IP, etc.
+
+  // payment_splits
+  //host, realstay
 }
 
 // The Document type = schema class + mongoose document properties

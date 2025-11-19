@@ -1,7 +1,4 @@
-import {
-  BadRequestException,
-  PipeTransform
-} from '@nestjs/common';
+import { BadRequestException, PipeTransform } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { BookingStatusEnum } from 'src/features/bookings/interfaces/bookings.interfaces';
 
@@ -84,5 +81,31 @@ export class ParseBookingStatusPipe implements PipeTransform {
       throw new BadRequestException(`Invalid status provided`);
     }
     return upper as BookingStatusEnum;
+  }
+}
+
+export function encodeTimestamp(date: Date | number = Date.now()): string {
+  const ts = typeof date === 'number' ? date : date.getTime();
+  return ts.toString(36);
+}
+
+export function decodeTimestamp(encoded: string): Date {
+  return new Date(parseInt(encoded, 36));
+}
+
+
+export function generateTransactionReference(type: 'inflow' | 'outflow' | 'refund'): string {
+  const ts = encodeTimestamp();
+  const rand = generateOtp(6);
+
+  switch (type) {
+    case 'inflow':
+      return `TRX-IN-${ts}-${rand}`;
+    case 'outflow':
+      return `TRX-OUT-${ts}-${rand}`;
+    case 'refund':
+      return `TRX-RFD-${ts}-${rand}`;
+    default:
+      throw new Error(`Invalid transaction type: ${type}`);
   }
 }

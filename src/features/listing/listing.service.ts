@@ -11,6 +11,7 @@ import { SavedListingResponse } from './interfaces/listing.types';
 import { Listing, ListingDocument } from './schemas/listing.schema';
 import { SavedListing, SavedListingDocument } from './schemas/savedListings';
 import { buildSearchQuery, getPagingParameters } from 'src/utils/helpers';
+import { CreateListingDto } from './dto/listing.dto';
 
 @Injectable()
 export class ListingService {
@@ -21,9 +22,13 @@ export class ListingService {
     private readonly savedListingModel: Model<SavedListingDocument>, // Inject SavedListing model
   ) {}
 
-  async createListing(payload: Listing): Promise<ListingDocument> {
+  async createListing(payload: CreateListingDto): Promise<ListingDocument> {
     try {
-      return await this.listingModel.create(payload);
+      if (!payload.photos?.length) {
+        throw new BadRequestException('At least one photo is required');
+      }
+
+      return (await this.listingModel.create(payload)).toObject();
     } catch (error) {
       if (error.code === 11000) {
         const duplicateField = Object.keys(
@@ -91,7 +96,6 @@ export class ListingService {
         },
       },
     ]);
-    
 
     return result.length > 0 ? result[0] : null;
   }
@@ -278,15 +282,18 @@ export class ListingService {
     filter: FilterQuery<Listing>,
   ): Promise<SavedListingResponse> {
     const { skip, limit, currentPage } = getPagingParameters(filter);
-  
-    const savedRecord = await this.savedListingModel.findOne({ user_id: userId }, { saved_listings: 1 });
-  
+
+    const savedRecord = await this.savedListingModel.findOne(
+      { user_id: userId },
+      { saved_listings: 1 },
+    );
+
     // No saved listings for the user
     const savedIds = savedRecord?.saved_listings ?? [];
     if (!savedIds.length) {
       return emptyListingResponse(currentPage, limit);
     }
-  
+
     const { search, ...restFilter } = filter;
     const query: FilterQuery<Listing> = {
       _id: { $in: savedIds },
@@ -296,12 +303,12 @@ export class ListingService {
         google_formatted_address: { $regex: search, $options: 'i' },
       }),
     };
-  
+
     const [total_items, listings] = await Promise.all([
       this.listingModel.countDocuments(query),
       this.listingModel.find(query).skip(skip).limit(limit).exec(),
     ]);
-  
+
     return {
       listings,
       pagination: {
@@ -312,7 +319,6 @@ export class ListingService {
       },
     };
   }
-  
 
   async updateById(
     id: string,
@@ -333,7 +339,10 @@ export class ListingService {
   }
 }
 
-function emptyListingResponse(currentPage: number, limit: number): SavedListingResponse {
+function emptyListingResponse(
+  currentPage: number,
+  limit: number,
+): SavedListingResponse {
   return {
     listings: [],
     pagination: {

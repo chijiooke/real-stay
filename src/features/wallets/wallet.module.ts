@@ -5,6 +5,8 @@ import { UsersModule } from '../users/users.module';
 import { Wallet, WalletSchema } from './schemas/wallet.schema';
 import { WalletsController } from './wallet.controller';
 import { WalletService } from './wallet.service';
+import { PaystackService } from '../transactions/payment-providers/paystack';
+import { TransactionModule } from '../transactions/transactions.module';
 
 @Module({
   imports: [
@@ -13,8 +15,9 @@ import { WalletService } from './wallet.service';
       { name: User.name, schema: UserSchema },
     ]),
     forwardRef(() => UsersModule),
+    forwardRef(() => TransactionModule)
   ],
-  providers: [WalletService],
+  providers: [WalletService, PaystackService],
   controllers: [WalletsController],
   exports: [WalletService, MongooseModule],
 })

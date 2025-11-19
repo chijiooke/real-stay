@@ -7,7 +7,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { OAuth2Client } from 'google-auth-library';
-import { RedisService } from 'src/utility-services/redis';
+import { RedisService } from 'src/redis/redis';
 import { generateOtp } from 'src/utils/helpers';
 import { MailgunService } from '../notifications/mail/mailgun/mailgun.service';
 import { User, UserDocument } from '../users/schemas/user.schema';

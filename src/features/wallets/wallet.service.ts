@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   BadRequestException,
+  forwardRef,
+  Inject,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -14,13 +16,22 @@ import {
   ModifyResult,
   Types,
 } from 'mongoose';
+import { generateTransactionReference } from 'src/utils/helpers';
+import {
+  PAYMENT_PROVIDER,
+  TransactionStatusEnum,
+  TransactionTypeEnum,
+} from '../transactions/interfaces/transactions.interfaces';
+import { PaystackService } from '../transactions/payment-providers/paystack';
+import { TransactionsService } from '../transactions/transactions.service';
+import { User, UserDocument } from '../users/schemas/user.schema';
+import { CreateRecipientDto, WithdrawalDto } from './dto/wallet.dto';
 import {
   WalletCreditMeta,
   WalletStatusEnum,
   WalletTransactionEntry,
 } from './interfaces/wallet.interfaces';
 import { Wallet, WalletDocument } from './schemas/wallet.schema';
-import { User, UserDocument } from '../users/schemas/user.schema';
 
 //TO DO: re-write using strategy pattern
 @Injectable()
@@ -28,9 +39,15 @@ export class WalletService implements OnModuleInit {
   constructor(
     @InjectModel(Wallet.name)
     private readonly walletModel: Model<WalletDocument>,
+
     @InjectModel(User.name)
     private readonly userModel: Model<UserDocument>,
+    private readonly paystackservice: PaystackService,
+    @Inject(forwardRef(() => TransactionsService))
+    private readonly transactionService: TransactionsService,
   ) {}
+
+  private static initialized = false;
 
   async onModuleInit() {
     await this.ensureCompanyWallet();
@@ -53,6 +70,108 @@ export class WalletService implements OnModuleInit {
 
       throw new InternalServerErrorException(
         error.message || 'Failed to create wallet',
+      );
+    }
+  }
+
+  async addWithdrawalAccount(
+    payload: CreateRecipientDto,
+  ): Promise<WalletDocument> {
+    try {
+      const res = await this.paystackservice.createRecipient(payload);
+
+      // Save recipient details to user's wallet
+      let wallet = await this.getWalletByCustomerID(payload.userid);
+      if (!wallet) {
+        wallet = await this.ensureUserWallet(
+          new Types.ObjectId(payload.userid),
+        );
+      }
+
+      //check if wallet details exist
+      if (
+        wallet.withdrawal_details?.account_no &&
+        wallet.withdrawal_details?.account_no != ''
+      ) {
+        throw new BadRequestException(
+          'Withdrawal account already exists for this wallet, kindly contact support to update it',
+        );
+      }
+
+      wallet = await this.walletModel
+        .findOneAndUpdate(
+          { _id: wallet._id },
+          {
+            is_withdrawal_account_set: true,
+            withdrawal_details: {
+              account_name: res.data.details.account_name,
+              account_no: res.data.details.account_number,
+              bank_code: res.data.details.bank_code,
+              bank_name: res.data.details.bank_name,
+              recipient_code: res.data.recipient_code,
+            },
+          },
+          { new: true },
+        )
+        .lean();
+
+      if (!wallet) {
+        throw new InternalServerErrorException('Failed to update wallet');
+      }
+      return wallet;
+    } catch (error) {
+      throw new InternalServerErrorException(
+        error.message || 'Failed to add bank account',
+      );
+    }
+  }
+
+  async withdraw(payload: WithdrawalDto) {
+    try {
+      const wallet = await this.getWalletByCustomerID(payload.user_id);
+      if (!wallet) {
+        throw new NotFoundException('Wallet not found for user');
+      }
+
+      if (!wallet.is_withdrawal_account_set || !wallet.withdrawal_details) {
+        throw new BadRequestException(
+          'No withdrawal account set for this wallet',
+        );
+      }
+
+      if (wallet.balance < payload.amount) {
+        throw new BadRequestException('Insufficient wallet balance');
+      }
+
+      //create a transaction record
+      const reference = generateTransactionReference('outflow');
+
+      //create a transaction record
+      await this.transactionService.createTransaction({
+        amount: payload.amount,
+        currency: wallet.currency,
+        customer_id: wallet.customer_id,
+        type: TransactionTypeEnum.WALLET_OUTFLOW,
+        status: TransactionStatusEnum.PENDING,
+        description: 'Wallet withdrawal initiated',
+        reference,
+        wallet_id: wallet.id,
+        provider: PAYMENT_PROVIDER.PAYSTACK,
+      });
+
+      // Proceed with withdrawal via Paystack
+      await this.paystackservice.initiateTransfer({
+        source: 'balance',
+        amount: payload.amount,
+        recipient: wallet.withdrawal_details.recipient_code,
+        reason: 'Wallet Withdrawal',
+        reference,
+      });
+
+      return { message: 'withdrawal initiated succesfully' };
+    } catch (error) {
+      throw new InternalServerErrorException(
+        error.message || 'Failed to process withdrawal',
       );
     }
   }
@@ -91,6 +210,10 @@ export class WalletService implements OnModuleInit {
   }
 
   async ensureAllUserWallet(): Promise<void> {
+    if (WalletService.initialized) return; // already ran
+    WalletService.initialized = true;
+
+    console.log('wallet creation worker started... 🏁');
     // 1. Fetch all user IDs
     const users = await this.userModel
       .find({ user_type: { $ne: 'admin' } })
@@ -116,8 +239,12 @@ export class WalletService implements OnModuleInit {
       (u) => !existingIds.has(u._id.toString()),
     );
 
-    console.log({ usersWithoutWallet });
-    if (!usersWithoutWallet.length) return;
+    if (!usersWithoutWallet.length) {
+      console.info(
+        'wallet creation worker completed, no wallet issues found ✅',
+      );
+      return;
+    }
 
     // 4. Create wallets in bulk for missing users
     const newWallets = usersWithoutWallet.map((u) => ({
@@ -130,6 +257,8 @@ export class WalletService implements OnModuleInit {
     }));
 
     await this.walletModel.insertMany(newWallets, { ordered: false });
+
+    console.info('wallet creation worker completed ✅');
   }
 
   async ensureUserWallet(userId: Types.ObjectId): Promise<WalletDocument> {
@@ -182,7 +311,7 @@ export class WalletService implements OnModuleInit {
   async updateWalletBalance(
     walletId: string,
     amount: number,
-    session: ClientSession,
+    session?: ClientSession,
   ) {
     return this.walletModel.updateOne(
       { _id: walletId },
@@ -255,10 +384,6 @@ export class WalletService implements OnModuleInit {
     if (!meta.reference) {
       throw new BadRequestException('Transaction reference is required');
     }
-
-    console.log(
-      `Crediting wallet for customer: ${customer_id}, amount: ${amount}`,
-    );
 
     const transactionEntry: WalletTransactionEntry = {
       reference: meta.reference,

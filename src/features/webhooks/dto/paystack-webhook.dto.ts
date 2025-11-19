@@ -1,5 +1,4 @@
 
-// src/webhooks/dto/paystack-webhook.dto.ts
 import { IsObject, IsString } from 'class-validator';
 
 export class PaystackWebhookDTO {

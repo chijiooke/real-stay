@@ -75,8 +75,6 @@ export class MailgunService {
         }
       }
 
-      console.log({ url });
-
       // 3. Send request
       await axios.post(url, formData, {
         auth: {

@@ -15,6 +15,8 @@ import { ReviewModule } from './features/reviews/reviews.module';
 import { UsersModule } from './features/users/users.module';
 import { HealthModule } from './health/health.module';
 import { UtilityModule } from './utility-modules/utility.module';
+import { WebhookModule } from './features/webhooks/webhook.module';
+import { WorkerModule } from './features/workers.ts/worker.module';
 
 @Module({
   imports: [
@@ -47,6 +49,8 @@ import { UtilityModule } from './utility-modules/utility.module';
     FirebaseModule,
     BookingModule,
     MailgunModule,
+    WebhookModule,
+    WorkerModule
   ],
 })
 export class AppModule {}

@@ -29,4 +29,13 @@ export class RedisService {
   async del(key: string) {
     await this.client.del(key);
   }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async enqueue(queue: string, payload: any): Promise<void> {
+    await this.client.lpush(queue, JSON.stringify(payload));
+  }
+  
+  getClient(): Redis {
+    return this.client;
+  }
 }

@@ -63,7 +63,6 @@ export class ChatController {
   async getConversations(@Req() req: Request) {
     const me = req.user as { _id: string };
 
-    console.log({ me });
     return this.chatService.getConversations(me._id.toString());
   }
 }

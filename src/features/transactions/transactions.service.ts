@@ -1,5 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  forwardRef,
+  Inject,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, FilterQuery, Model, Types } from 'mongoose';
 import {
@@ -7,6 +14,9 @@ import {
   getPagingParameters,
   normalizeObjectIdFields,
 } from 'src/utils/helpers';
+import { CurrencyEnum } from '../wallets/interfaces/wallet.interfaces';
+import { WalletService } from '../wallets/wallet.service';
+import { PaystackWebhookDTO } from './dto/transactions.dto';
 import { PaystackInitPaymentResponse } from './interfaces/paystack.interface';
 import {
   PAYMENT_PROVIDER,
@@ -16,15 +26,20 @@ import {
 } from './interfaces/transactions.interfaces';
 import { PaystackService } from './payment-providers/paystack';
 import { Transaction, TransactionDocument } from './schemas/transaction.schema';
-import { CurrencyEnum } from '../wallets/interfaces/wallet.interfaces';
 
 //TO DO: re-write using strategy pattern
 @Injectable()
 export class TransactionsService {
+  private readonly logger = new Logger(TransactionsService.name);
+
   constructor(
     @InjectModel(Transaction.name)
     private readonly transactionModel: Model<TransactionDocument>, // Inject Listing model
     private readonly paystackservice: PaystackService,
+    // private readonly walletservice: WalletService,
+
+    @Inject(forwardRef(() => WalletService))
+    private readonly walletservice: WalletService,
   ) {}
 
   async initPayment(
@@ -44,7 +59,7 @@ export class TransactionsService {
     const response: PaystackVerificationResponse =
       await this.paystackservice.verifyTransaction(reference);
 
-    if (!response.status || response.data.status !== 'success') {
+    if (!response.status) {
       throw new BadRequestException(
         'Payment verification failed or was not successful.',
       );
@@ -59,7 +74,7 @@ export class TransactionsService {
       booking_id: bookingId,
       amount: response.data.amount,
       currency: response.data.currency || 'NGN',
-      status: TransactionStatusEnum.SUCCESS,
+      status: response.data.status as TransactionStatusEnum,
       reference,
       provider: PAYMENT_PROVIDER.PAYSTACK,
       type: TransactionTypeEnum.PAYMENT,
@@ -91,11 +106,12 @@ export class TransactionsService {
     },
     options: { session?: ClientSession },
   ) {
+
     return this.transactionModel.create(
       [
         {
           reference: data.transactionRef,
-          type: 'CREDIT',
+          type: TransactionTypeEnum.WALLET_INFLOW,
           wallet_id: data.property_owner_wallet_id,
           customer_id: data.property_owner_customer_id,
           amount: data.customerShare,
@@ -107,8 +123,8 @@ export class TransactionsService {
         },
         {
           reference: data.transactionRef,
-          type: 'CREDIT',
-          wallet_owner: data.company_wallet_id,
+          type: TransactionTypeEnum.WALLET_INFLOW,
+          wallet_id: data.company_wallet_id,
           amount: data.companyShare,
           description: 'Company booking revenue',
           currency: CurrencyEnum.NAIRA,
@@ -192,7 +208,6 @@ export class TransactionsService {
       'listing_id',
     ]);
 
-    console.log({ filter });
     const baseMatchStage: any = { ...filter };
 
     const pipeline: any[] = [
@@ -297,5 +312,105 @@ export class TransactionsService {
       .findOneAndUpdate(filter, payload, { new: true })
       .lean()
       .exec();
+  }
+
+  //webhook event handlers
+
+  async handlePaystackWebhook(data: PaystackWebhookDTO): Promise<void> {
+    const reference = data?.data?.reference;
+    const amount = data?.data?.amount;
+
+    // Validate transaction existence
+    const transaction = await this.getTransaction({ reference });
+    if (!transaction) {
+      this.logger.error(`Transaction not found for reference: ${reference}`);
+      throw new InternalServerErrorException('Transaction not found');
+    }
+
+    // Dispatch event to the appropriate handler
+    await this.handleEvent(data.event, transaction, amount, data);
+  }
+
+  private async handleEvent(
+    event: string,
+    transaction: any,
+    amount: number,
+    data: PaystackWebhookDTO,
+  ): Promise<void> {
+    switch (event) {
+      case 'transfer.success':
+        await this.handleTransferSuccess(transaction, amount, data);
+        break;
+
+      case 'transfer.failed':
+        await this.handleTransferFailure(transaction);
+        break;
+
+      case 'transfer.reversed':
+        await this.handleTransferReversal(transaction);
+        break;
+
+      default:
+        this.logger.warn(`Unhandled Paystack event: ${event}`);
+        break;
+    }
+  }
+
+  private async handleTransferSuccess(
+    transaction: any,
+    amount: number,
+    data: PaystackWebhookDTO,
+  ): Promise<void> {
+    // Validate wallet existence
+    const wallet = await this.walletservice.getWalletByCustomerID(
+      transaction.customer_id?.toHexString(),
+    );
+    if (!wallet) {
+      this.logger.error(
+        `Wallet not found for customer ID: ${transaction.customer_id}`,
+      );
+      throw new InternalServerErrorException('Wallet not found');
+    }
+
+    // Deduct amount from wallet balance
+    await this.walletservice.updateWalletBalance(wallet.id, -amount);
+
+    // Update transaction status to success
+    await this.updateTransactionByFilter(
+      { reference: transaction.reference },
+      {
+        status: TransactionStatusEnum.SUCCESS,
+        meta: { transfer_code: data.data.transfer_code },
+        description: 'Wallet withdrawal successful',
+      },
+    );
+
+    this.logger.log(`Transfer success processed for ${transaction.reference}`);
+  }
+
+  private async handleTransferFailure(transaction: any): Promise<void> {
+    // Update transaction status to failed
+    await this.updateTransactionByFilter(
+      { reference: transaction.reference },
+      {
+        status: TransactionStatusEnum.FAILED,
+        description: 'Wallet withdrawal failed',
+      },
+    );
+
+    this.logger.warn(`Transfer failed for ${transaction.reference}`);
+  }
+
+  private async handleTransferReversal(transaction: any): Promise<void> {
+    // Update transaction status to reversed
+    await this.updateTransactionByFilter(
+      { reference: transaction.reference },
+      {
+        status: TransactionStatusEnum.REVERSED,
+        description: 'Wallet withdrawal reversed',
+      },
+    );
+
+    this.logger.warn(`Transfer reversed for ${transaction.reference}`);
   }
 }

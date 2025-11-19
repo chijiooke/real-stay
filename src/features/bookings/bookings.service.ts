@@ -4,6 +4,7 @@ import {
   ConflictException,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
@@ -18,10 +19,19 @@ import { BookingStatusEnum } from './interfaces/bookings.interfaces';
 import { NotFoundError } from 'rxjs';
 import { TransactionsService } from '../transactions/transactions.service';
 import { WalletService } from '../wallets/wallet.service';
-import { TransactionStatusEnum } from '../transactions/interfaces/transactions.interfaces';
+import {
+  PaystackVerificationResponse,
+  TransactionStatusEnum,
+} from '../transactions/interfaces/transactions.interfaces';
+import { TransactionDocument } from '../transactions/schemas/transaction.schema';
+import { RedisService } from 'src/redis/redis';
+import { PaystackEventQueue } from '../transactions/interfaces/paystack.interface';
+import { PaystackService } from '../transactions/payment-providers/paystack';
 
 @Injectable()
 export class BookingService {
+  private readonly logger = new Logger(BookingService.name);
+
   constructor(
     @InjectModel(Booking.name)
     private readonly bookingModel: Model<BookingDocument>,
@@ -31,6 +41,8 @@ export class BookingService {
 
     private readonly transactionService: TransactionsService,
     private readonly walletService: WalletService,
+    private readonly redisService: RedisService,
+    private readonly paystackservice: PaystackService,
   ) {}
 
   async requestReservation(payload: Booking): Promise<BookingDocument> {
@@ -78,11 +90,64 @@ export class BookingService {
     return this.updateByFilter({ _id: booking._id }, booking);
   }
 
+  async processPolledTransaction(transaction: TransactionDocument) {
+    const reference = transaction.reference;
+    const response: PaystackVerificationResponse =
+      await this.paystackservice.verifyTransaction(reference);
+
+    // re-enqueue if status is still on-going
+    if (response?.data?.status == TransactionStatusEnum.ONGOING) {
+      await this.redisService.enqueue(PaystackEventQueue.INFLOW, reference);
+      return;
+    }
+
+    // else, Fetch booking related to the transaction
+    const bookingId = transaction.booking_id;
+    if (!bookingId) {
+      this.logger.warn(`Transaction ${reference} has no booking_id`);
+      return;
+    }
+
+    const booking = await this.getBookingByID(bookingId.toString());
+    if (!booking) {
+      this.logger.warn(
+        `Booking ${bookingId} not found for transaction ${reference}`,
+      );
+      return;
+    }
+
+    // Start a DB session and call the reusable success handler
+    const session = await this.connection.startSession();
+    session.startTransaction();
+    try {
+      // Ensure the success handler is accessible (public) and takes same args
+      await this.handleSuccessfulPayment(
+        booking,
+        reference,
+        transaction,
+        session,
+      );
+
+      await session.commitTransaction();
+      this.logger.log(
+        `Booking ${bookingId} completed for transaction ${reference}`,
+      );
+    } catch (err) {
+      await session.abortTransaction();
+      this.logger.error(
+        `Failed completing booking ${bookingId} for ref ${reference}`,
+        err,
+      );
+      // handle error: push to dead-letter queue, alerting, etc.
+    } finally {
+      await session.endSession();
+    }
+  }
+
   async completeBooking(
     transactionRef: string,
     bookingId: string,
   ): Promise<BookingDocument | null> {
-    // Step 1: Fetch and validate booking
     const booking = await this.getBookingByID(bookingId);
     if (!booking) {
       throw new NotFoundException(
@@ -90,11 +155,9 @@ export class BookingService {
       );
     }
 
-
-    //validatio to prevent payment for un-reserved bookings
     if (booking.status?.toUpperCase() !== BookingStatusEnum.RESERVED) {
       throw new BadRequestException(
-        "Kindly wait for host to confirm your reservation before making payment.",
+        'Kindly wait for host to confirm your reservation before making payment.',
       );
     }
 
@@ -102,7 +165,6 @@ export class BookingService {
     session.startTransaction();
 
     try {
-      // Step 2: Ensure transaction doesn't already exist
       const existingTransaction = await this.transactionService.getTransaction(
         {
           booking_id: booking._id,
@@ -113,7 +175,7 @@ export class BookingService {
             ],
           },
         },
-        { session }, // CRITICAL: Pass session here
+        { session },
       );
 
       if (existingTransaction) {
@@ -122,7 +184,6 @@ export class BookingService {
         );
       }
 
-      // Step 3: Validate payment
       const transaction = await this.transactionService.validatePayment(
         transactionRef,
         session,
@@ -136,95 +197,32 @@ export class BookingService {
         );
       }
 
-      // Early return if payment is still processing
-      if (transaction.status === 'ongoing') {
+      // Handle ongoing separately (e.g., enqueue for later processing)
+      if (transaction.status === TransactionStatusEnum.ONGOING) {
         await session.abortTransaction();
+        await this.redisService.enqueue(
+          //queue for verification
+          PaystackEventQueue.INFLOW,
+          transaction.reference,
+        );
         return booking;
       }
 
-      // Validate transaction status
       if (transaction.status !== TransactionStatusEnum.SUCCESS) {
         throw new BadRequestException(
           `Cannot complete booking. Transaction status is '${transaction.status}'.`,
         );
       }
 
-      // Step 4: Validate amount
-      const totalAmount = transaction.amount || 0;
-      if (totalAmount <= 0) {
-        throw new BadRequestException('Invalid transaction amount.');
-      }
-
-      // Step 5: Compute split logic (property owner gets 90%, company gets 10%)
-      const customerShare = totalAmount * 0.9;
-      const companyShare = totalAmount * 0.1;
-
-      // Step 6: Fetch wallets within transaction
-      const [companyWallet, propertyOwnerWallet] = await Promise.all([
-        this.walletService.getCompanyWallet({ session }), // CRITICAL: Pass session
-        this.walletService.getWalletByCustomerID(
-          booking.property_owner_id.toHexString(),
-          { session }, // CRITICAL: Pass session
-        ),
-      ]);
-
-      if (!companyWallet) {
-        throw new InternalServerErrorException('Company wallet not found.');
-      }
-
-      if (!propertyOwnerWallet?.customer_id) {
-        throw new InternalServerErrorException(
-          'Property owner wallet not found.',
-        );
-      }
-
-      // Step 7: Perform atomic wallet credits
-      await Promise.all([
-        this.walletService.creditWalletByCustomerID(
-          booking.property_owner_id,
-          customerShare,
-          {
-            reference: transactionRef,
-            type: 'BOOKING_REVENUE', // Property owner earns revenue
-            description: `Revenue from booking ${booking._id}`,
-            session, // CRITICAL: Ensure session is passed
-          },
-        ),
-        this.walletService.creditCompanyWallet(companyShare, {
-          reference: transactionRef,
-          type: 'BOOKING_FEE', // Company earns fee
-          description: `Platform fee for booking ${booking._id}`,
-          session, // CRITICAL: Ensure session is passed
-        }),
-      ]);
-
-      // Step 8: Record accounting entries
-      await this.transactionService.recordSplitTransaction(
-        {
-          booking_id: booking._id,
-          transactionRef,
-          property_owner_wallet_id: propertyOwnerWallet.id,
-          property_owner_customer_id: propertyOwnerWallet.customer_id,
-          company_wallet_id: companyWallet.id,
-          companyShare,
-          customerShare,
-        },
-        { session },
+      // ✅ Delegate to extracted helper
+      const updatedBooking = await this.handleSuccessfulPayment(
+        booking,
+        transactionRef,
+        transaction,
+        session,
       );
 
-      // Step 9: Update booking status
-      const updatedBooking = await this.updateByFilter(
-        { _id: booking._id },
-        {
-          status: BookingStatusEnum.BOOKED,
-          paymentRef: transactionRef,
-        },
-        { session },
-      );
-
-      // Step 10: Commit transaction
       await session.commitTransaction();
-
       return updatedBooking;
     } catch (error) {
       await session.abortTransaction();
@@ -233,6 +231,91 @@ export class BookingService {
     } finally {
       await session.endSession();
     }
+  }
+
+  async handleSuccessfulPayment(
+    booking: BookingDocument,
+    transactionRef: string,
+    transaction: Partial<TransactionDocument>,
+    session: ClientSession,
+  ): Promise<BookingDocument | null> {
+    // Step 4: Validate amount
+    const totalAmount = transaction.amount || 0;
+    if (totalAmount <= 0) {
+      throw new BadRequestException('Invalid transaction amount.');
+    }
+
+    // Step 5: Compute split logic (property owner gets 90%, company gets 10%)
+    const customerShare = totalAmount * 0.9;
+    const companyShare = totalAmount * 0.1;
+
+    // Step 6: Fetch wallets within transaction
+    const [companyWallet, propertyOwnerWallet] = await Promise.all([
+      this.walletService.getCompanyWallet({ session }),
+      this.walletService.getWalletByCustomerID(
+        booking.property_owner_id.toHexString(),
+        { session },
+      ),
+    ]);
+
+    if (!companyWallet) {
+      throw new InternalServerErrorException('Company wallet not found.');
+    }
+
+    if (!propertyOwnerWallet) {
+      throw new InternalServerErrorException(
+        'Property owner wallet not found.',
+      );
+    }
+
+
+
+    // Step 7: Perform atomic wallet credits
+    await Promise.all([
+      this.walletService.creditWalletByCustomerID(
+        booking.property_owner_id,
+        customerShare,
+        {
+          reference: transactionRef,
+          type: 'BOOKING_REVENUE',
+          description: `Revenue from booking ${booking._id}`,
+          session,
+        },
+      ),
+      this.walletService.creditCompanyWallet(companyShare, {
+        reference: transactionRef,
+        type: 'BOOKING_FEE',
+        description: `Platform fee for booking ${booking._id}`,
+        session,
+      }),
+    ]);
+
+    // Step 8: Record accounting entries
+    await this.transactionService.recordSplitTransaction(
+      {
+        booking_id: booking._id,
+        transactionRef,
+        property_owner_wallet_id: propertyOwnerWallet._id as Types.ObjectId,
+        property_owner_customer_id:
+          propertyOwnerWallet.customer_id as Types.ObjectId,
+        company_wallet_id: companyWallet.id,
+        companyShare,
+        customerShare,
+      },
+      { session },
+    );
+
+    // Step 9: Update booking status
+    const updatedBooking = await this.updateByFilter(
+      { _id: booking._id },
+      {
+        status: BookingStatusEnum.BOOKED,
+        paymentRef: transactionRef,
+      },
+      { session },
+    );
+
+    return updatedBooking;
   }
 
   async createBooking(payload: Booking): Promise<BookingDocument> {

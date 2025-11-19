@@ -26,3 +26,11 @@ export interface WalletTransactionEntry {
   createdAt: Date;
   status: string;
 }
+
+export interface WithdrawalDetails {
+  account_name: string;
+  account_no: string;
+  bank_code: string;
+  bank_name: string;
+  recipient_code: string;
+}

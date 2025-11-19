@@ -7,6 +7,8 @@ import { WalletModule } from '../wallets/wallet.module';
 import { bookingsController } from './bookings.controller';
 import { BookingService } from './bookings.service';
 import { Booking, BookingSchema } from './schemas/bookings.schema';
+import { RedisModule } from 'src/redis/redis.module';
+import { PaystackService } from '../transactions/payment-providers/paystack';
 
 @Module({
   imports: [
@@ -14,9 +16,10 @@ import { Booking, BookingSchema } from './schemas/bookings.schema';
     AuthModule,
     ListingModule,
     WalletModule,
+    RedisModule,
     forwardRef(() => TransactionModule),
   ],
-  providers: [BookingService],
+  providers: [BookingService, PaystackService],
   controllers: [bookingsController],
   exports: [BookingService],
 })

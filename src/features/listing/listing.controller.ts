@@ -10,10 +10,10 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
-import { ListingService } from './listing.service';
-import { Listing } from './schemas/listing.schema';
 import { JwtAuthGuard } from '../auth/jwtAuthGuard';
 import { UserStatusEnum } from '../users/interfaces/user.types';
+import { CreateListingDto } from './dto/listing.dto';
+import { ListingService } from './listing.service';
 
 @Controller('listing')
 export class ListingController {
@@ -22,7 +22,7 @@ export class ListingController {
   @Post('create')
   @UseGuards(JwtAuthGuard)
   create(
-    @Body() payload: Listing,
+    @Body() payload: CreateListingDto,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     @Request() authData: any,
   ) {

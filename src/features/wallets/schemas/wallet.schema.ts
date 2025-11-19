@@ -1,6 +1,18 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { Document, Types } from 'mongoose';
-import { WalletStatusEnum } from '../interfaces/wallet.interfaces';
+import {
+  WalletStatusEnum,
+  WithdrawalDetails,
+} from '../interfaces/wallet.interfaces';
+
+@Schema({ _id: false }) // No separate _id for subdocument
+export class WithdrawalDetailsProps {
+  @Prop() account_name: string;
+  @Prop() account_no: string;
+  @Prop() bank_code: string;
+  @Prop() bank_name: string;
+  @Prop() recipient_code: string;
+}
 
 @Schema({ timestamps: true }) // Automatically adds createdAt & updatedAt
 export class Wallet {
@@ -22,11 +34,20 @@ export class Wallet {
   @Prop({ required: true, default: true })
   can_withdraw: boolean;
 
+  @Prop({ required: true, default: false })
+  is_withdrawal_account_set: boolean;
+
   @Prop({ required: true, default: true })
   can_deposit: boolean;
 
   @Prop()
   virtual_account_no: string;
+
+  @Prop({
+    type: WithdrawalDetailsProps,
+    default: {},
+  })
+  withdrawal_details?: WithdrawalDetails;
 }
 
 // The Document type = schema class + mongoose document properties

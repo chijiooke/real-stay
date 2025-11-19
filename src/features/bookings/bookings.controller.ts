@@ -72,7 +72,6 @@ export class bookingsController {
       throw new NotFoundException('booking not found');
     }
 
-    console.log(authData.user._id.toHexString());
     if (
       booking.property_owner_id.toHexString() !==
         authData.user._id.toHexString() &&
